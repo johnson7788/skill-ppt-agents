@@ -67,11 +67,11 @@ _TERMINAL_MAX_STDOUT = 8000
 _TERMINAL_MAX_STDERR = 2000
 
 
-def terminal(command: str, timeout: int = 60) -> dict:
-    """在服务器上执行 shell 命令并返回输出。
+async def terminal(command: str, tool_context: ToolContext, timeout: int = 60) -> dict:
+    """执行 shell 命令并返回输出。
 
     适用于查看文件、运行构建/检索脚本、查询系统信息等。
-    注意：这是高权限能力，仅在你明确知道命令安全时使用。
+    命令在当前租户的隔离沙箱中执行（多租户互不干扰）；未启用沙箱时在服务器本地执行。
 
     参数：
     - command: 要执行的 shell 命令。
@@ -81,6 +81,17 @@ def terminal(command: str, timeout: int = 60) -> dict:
     """
     if not command or not command.strip():
         return {"error": "command 不能为空"}
+
+    from app import sandbox as sbx
+
+    if sbx.enabled():
+        # 租户身份即隔离边界；server 在 create_session 时把 user_id 写入 _sbkey。
+        key = str(tool_context.state.get("_sbkey") or tool_context.state.get("user_id") or "default")
+        try:
+            return await sbx.run_async(key, command, timeout)
+        except Exception as e:  # noqa: BLE001 — 工具边界，统一回报给模型
+            return {"error": f"沙箱执行失败: {e}"}
+
     try:
         r = subprocess.run(
             command,

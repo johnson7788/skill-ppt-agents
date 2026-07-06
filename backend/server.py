@@ -88,6 +88,21 @@ runner = Runner(
 NARRATOR_STATE_KEY = "_narrator_cards"
 
 
+@app.on_event("startup")
+async def _start_sandbox_pool() -> None:
+    from app import sandbox as sbx
+    if sbx.enabled():
+        await sbx.start_pool()
+        logger.info("Sandbox pool started (multi-tenant isolation ON)")
+
+
+@app.on_event("shutdown")
+async def _stop_sandbox_pool() -> None:
+    from app import sandbox as sbx
+    if sbx.enabled():
+        await sbx.stop_pool()
+
+
 # ---------------------------------------------------------------------------
 # SSE 响应缓存 — 持久化到本地 cache/ 目录，重启不丢失，方便回溯
 # ---------------------------------------------------------------------------
@@ -508,7 +523,9 @@ async def cache_clear():
 # ---------------------------------------------------------------------------
 @app.post("/chat")
 async def chat(req: ChatRequest):
-    session = await session_service.create_session(user_id=req.user_id, app_name=APP_NAME)
+    session = await session_service.create_session(
+        user_id=req.user_id, app_name=APP_NAME, state={"_sbkey": req.user_id}
+    )
     full_message = _build_message_with_files(req.message, req.user_id)
     message = types.Content(role="user", parts=[types.Part.from_text(text=full_message)])
     slog = SessionLogger(session.id, req.user_id, req.message)
@@ -813,7 +830,9 @@ async def chat_stream(message: str, user_id: str = "default_user"):
 
     缓存逻辑：对相同 full_message（含文件内容）的请求直接回放已缓存的事件流，跳过 LLM 调用。
     """
-    session = await session_service.create_session(user_id=user_id, app_name=APP_NAME)
+    session = await session_service.create_session(
+        user_id=user_id, app_name=APP_NAME, state={"_sbkey": user_id}
+    )
     full_message = _build_message_with_files(message, user_id)
 
     # 检查缓存命中 → 快速回放缓存事件，跳过 LLM 调用

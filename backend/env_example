@@ -75,3 +75,24 @@ SSE_CACHE_ENABLED=true
 SSE_CACHE_MAX_SIZE=500
 # 缓存有效期，单位秒（默认 86400 = 24 小时）
 SSE_CACHE_TTL=86400
+
+# ---------------------------------------------------------------------------
+# 多租户命令隔离（OpenSandbox）
+# ---------------------------------------------------------------------------
+# 启用后，terminal 工具的命令在每个租户（user_id）独占的隔离沙箱中执行，
+# 文件/进程/已装包互不干扰。未启用时命令在服务器本地执行（默认）。
+# 依赖：需先启动 OpenSandbox 服务（uvx opensandbox-server）+ Docker，
+#       并安装 SDK：uv pip install opensandbox
+SANDBOX_ENABLED=false
+# 预热池大小（启动时预建的空闲沙箱数）
+SANDBOX_POOL_SIZE=3
+# 沙箱镜像
+SANDBOX_IMAGE=python:3.12
+# OpenSandbox 服务连接
+SANDBOX_DOMAIN=localhost:8080
+SANDBOX_PROTOCOL=http
+SANDBOX_API_KEY=
+# 单个沙箱硬性存活上限（分钟），兜底防泄漏；活跃会自动续期
+SANDBOX_TIMEOUT_MINUTES=30
+# 租户闲置多久后回收其沙箱（分钟）
+SANDBOX_IDLE_MINUTES=15

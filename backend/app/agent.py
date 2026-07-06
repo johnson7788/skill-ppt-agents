@@ -20,16 +20,23 @@
 
 from __future__ import annotations
 
+import base64
 import os
 import pathlib
 
 from dotenv import load_dotenv
 from google.adk import Agent
 from google.adk.code_executors import UnsafeLocalCodeExecutor
+from google.adk.code_executors.base_code_executor import BaseCodeExecutor
+from google.adk.code_executors.code_execution_utils import (
+    CodeExecutionInput,
+    CodeExecutionResult,
+)
 from google.adk.skills import load_skill_from_dir
 from google.adk.tools import FunctionTool
 from google.adk.tools.skill_toolset import SkillToolset
 
+from app import sandbox as sbx
 from app.create_model import create_model
 from app.narrator import (
     after_model_callback,
@@ -82,12 +89,40 @@ MODEL_PROVIDER = os.environ.get("MODEL_PROVIDER", "deepseek")
 MODEL_NAME = os.environ.get("MODEL_NAME", "deepseek-v4-pro")
 
 # ---------------------------------------------------------------------------
+# 代码执行器 — 启用沙箱时，模型生成的 Python 也在租户沙箱里跑（否则本地执行）
+# ---------------------------------------------------------------------------
+class SandboxCodeExecutor(BaseCodeExecutor):
+    """把模型生成的 Python 代码路由进租户独占沙箱执行。"""
+
+    def execute_code(
+        self,
+        invocation_context,
+        code_execution_input: CodeExecutionInput,
+    ) -> CodeExecutionResult:
+        state = getattr(invocation_context.session, "state", None) or {}
+        key = str(state.get("_sbkey") or invocation_context.user_id or "default")
+        # base64 传递源码，避开 shell 转义问题。ponytail: 依赖镜像里有 base64+python3
+        # （python:3.x 官方镜像默认满足）；换精简镜像时改为写文件再执行。
+        b64 = base64.b64encode(code_execution_input.code.encode()).decode()
+        command = f"echo {b64} | base64 -d | python3"
+        try:
+            r = sbx.run_sync(key, command, self.timeout_seconds or 60)
+        except Exception as e:  # noqa: BLE001 — 执行边界，回报给模型
+            return CodeExecutionResult(stdout="", stderr=f"沙箱执行失败: {e}", output_files=[])
+        return CodeExecutionResult(
+            stdout=r.get("stdout", ""), stderr=r.get("stderr", ""), output_files=[]
+        )
+
+
+_code_executor = SandboxCodeExecutor() if sbx.enabled() else UnsafeLocalCodeExecutor()
+
+# ---------------------------------------------------------------------------
 # 学术论文研究智能体
 # ---------------------------------------------------------------------------
 root_agent = Agent(
     model=create_model(model=MODEL_NAME, provider=MODEL_PROVIDER),
     name="arxiv_research_agent",
-    code_executor=UnsafeLocalCodeExecutor(),
+    code_executor=_code_executor,
     description=(
         "学术论文研究智能体 — 提供 arXiv 论文检索、研究综述、"
         "方向追踪等服务，同时以旁路解说的方式"
