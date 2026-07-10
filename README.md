@@ -1,4 +1,4 @@
-# 学术论文研究智能体
+# 瀚森
 
 基于 Google ADK + DeepSeek 构建的学术论文研究智能体，支持**arXiv 论文检索、网页搜索、文件上传问答**，并内置**任务规划、终端执行、代码执行、图片分析（OCR）、人在回路澄清**等智能体能力。通过**旁路解说架构**将 Agent 的工具调用与思考过程翻译为通俗易懂的中文卡片，让非技术用户也能理解 AI 的分析过程。
 
@@ -13,6 +13,7 @@
 | **文件上传问答** | 支持 PDF、PPTX、PPT、TXT 文件上传，自动提取内容并带位置标记（`[第X页]`、`[幻灯片X]`）注入 LLM 上下文 |
 | **任务规划（todo）** | 面对多步骤研究任务，Agent 先拆解出待办清单并逐步推进、实时更新进度 |
 | **终端执行（terminal）** | 在服务器上执行 shell 命令，查看环境、运行脚本、读取文件 |
+| **多租户沙箱隔离** | 启用后 terminal/code 命令在每个租户（`user_id`）独占的 OpenSandbox 沙箱中执行，文件/进程/已装包互不干扰；预热池 + 闲置回收 + TTL 兜底 |
 | **代码执行（code）** | 内置 Python 代码执行器，自动编写并运行代码做数据统计与计算，过程同样以解说卡片展示 |
 | **图片分析 / OCR（vision）** | 上传截图、图表、结果表、扫描件等图片，调用独立视觉模型理解内容或提取文字（DeepSeek 无视觉能力，单独配置 qwen-vl-max） |
 | **人在回路澄清（clarify）** | 需求模糊或缺关键信息时，Agent 主动反问澄清，用户回答后无缝续接同一会话继续执行 |
@@ -177,6 +178,40 @@ SSE 续接（text / thought / tool_step ... / done），无缝继续执行
 
 ---
 
+## 多租户沙箱隔离（OpenSandbox）
+
+`terminal`、`execute_code` 默认在服务器本地执行。启用沙箱后，命令改在**每个租户（`user_id`）独占的隔离沙箱**中执行，文件、进程、已装包互不干扰。实现见 `backend/app/sandbox.py`：
+
+- **预热池**：启动时预建 `SANDBOX_POOL_SIZE` 个空闲沙箱，首次使用即时 acquire，reconciler 自动补满
+- **每租户独占 + 活跃续期**：同一 `user_id` 复用同一沙箱，活跃时自动续 TTL，避免长会话被硬杀
+- **闲置回收 + TTL 兜底**：租户闲置 `SANDBOX_IDLE_MINUTES` 后回收；单沙箱硬性存活上限 `SANDBOX_TIMEOUT_MINUTES` 防泄漏
+- **技能脚本同步**：`ensure_skills` 首次使用时把本地 skill 脚本写入沙箱
+- **未启用零依赖**：`SANDBOX_ENABLED=false` 时回退本地 `subprocess`，不引入 OpenSandbox SDK，行为不变
+
+### 启用步骤（自动化脚本）
+
+两个脚本把手动操作收敛为一次性准备 + 每次启动，沙箱由后端连接池按每租户自动创建，无需手动 `osb sandbox create`：
+
+```bash
+# 1. 一次性准备：检查 Docker、拉取 execd 镜像、构建 my-sandbox:latest、写入服务端配置
+./prepare.sh
+
+# 2. 启动 OpenSandbox 服务端（保持运行，幂等——已在 :8080 运行则自动跳过）
+./start_sandbox.sh
+
+# 3. 在 backend/.env 中确认已开启（prepare 后默认即为下列值）
+#    SANDBOX_ENABLED=true
+#    SANDBOX_IMAGE=my-sandbox:latest
+
+# 4. 启动应用，后端会自动向服务端创建每租户沙箱
+./start.sh
+```
+
+> `prepare.sh` 可重复运行（幂等）；`start_sandbox.sh` 检测到服务端已在跑会直接跳过。
+> 手动构建镜像：`docker build -t my-sandbox:latest ./sandbox-image`。
+
+---
+
 ## 项目结构
 
 ```
@@ -184,6 +219,9 @@ arxiv-research-agent/
 ├── .env                          # 环境变量（API Key、端口等）
 ├── Dockerfile                    # 生产镜像（Python 3.12 + Node 20 + Gunicorn）
 ├── docker-compose.yml            # 容器编排（2 CPU、2G RAM）
+├── sandbox-image/                # 沙箱镜像（python:3.12 + pandoc + 技能脚本预装）
+├── prepare.sh                    # 沙箱一次性准备（拉 execd、构建 my-sandbox、写服务端配置）
+├── start_sandbox.sh              # 启动 OpenSandbox 服务端（幂等）
 ├── start.sh                      # 本地开发一键启动（后端 + 前端）
 ├── start_manage.sh               # 管理服务一键启动（管理后端 + 管理前端）
 ├── deploy.sh                     # 生产部署（git pull → docker build → 健康检查）
@@ -195,6 +233,7 @@ arxiv-research-agent/
 │   ├── app/
 │   │   ├── agent.py              # Agent 定义（DeepSeek + 技能 + 工具 + 回调）
 │   │   ├── tools.py             # 自定义工具：todo / terminal / vision_analyze / clarify
+│   │   ├── sandbox.py           # 多租户沙箱隔离（OpenSandbox 预热池 + 每租户独占 + 闲置回收）
 │   │   ├── create_model.py      # 模型工厂（10+ 供应商，统一走 LiteLLM）
 │   │   ├── narrator.py           # 旁路解说回调逻辑（三回调 + 格式化）
 │   │   ├── narrator_rules.py    # 解说规则：TOOL_LABELS 工具标签 + 思考翻译模式
@@ -263,12 +302,6 @@ cp backend/env_example backend/.env
 # 4. 一键启动（后端 :8585 + 前端 :3585）
 ./start.sh
 
-# 或分别启动：
-cd backend && uv run python server.py --port 8585    # 后端
-cd frontend && npm run dev                            # 前端（自动代理到后端）
-
-# 5. 管理服务（可选）
-./start_manage.sh                                     # 管理后端 :8686 + 管理前端 :3686
 ```
 
 ### CLI 客户端（无需前端）
@@ -459,6 +492,14 @@ cd manage_frontend && npm install && npm run dev               # 管理前端（
 | `SSE_CACHE_TTL` | 缓存 TTL（秒） | `86400`（24h） |
 | `WORKERS` | Gunicorn 进程数 | `4` |
 | `TIMEOUT` | Gunicorn 超时（秒） | `600` |
+| `SANDBOX_ENABLED` | 启用多租户沙箱隔离（未启用则命令走本地 `subprocess`） | `false` |
+| `SANDBOX_IMAGE` | 沙箱镜像标识 | `python:3.12` |
+| `SANDBOX_POOL_SIZE` | 预热池大小（启动时预建的空闲沙箱数） | `3` |
+| `SANDBOX_DOMAIN` | OpenSandbox 服务地址 | `localhost:8080` |
+| `SANDBOX_PROTOCOL` | OpenSandbox 协议 | `http` |
+| `SANDBOX_API_KEY` | OpenSandbox API 密钥 | `123456` |
+| `SANDBOX_TIMEOUT_MINUTES` | 单沙箱硬性存活上限（分钟），活跃自动续期 | `30` |
+| `SANDBOX_IDLE_MINUTES` | 租户闲置多久后回收其沙箱（分钟） | `15` |
 
 ---
 
@@ -515,8 +556,3 @@ TOOL_LABELS = {
 
 ---
 
-## 如有疑问
-
-如有任何问题，欢迎添加作者微信交流：
-
-![微信二维码](docs/weichat.png)

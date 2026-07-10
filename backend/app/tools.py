@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import os
 import pathlib
+import shutil
 import subprocess
 
 from google.adk.tools import LongRunningFunctionTool, ToolContext
@@ -85,8 +86,7 @@ async def terminal(command: str, tool_context: ToolContext, timeout: int = 60) -
     from app import sandbox as sbx
 
     if sbx.enabled():
-        # 租户身份即隔离边界；server 在 create_session 时把 user_id 写入 _sbkey。
-        key = str(tool_context.state.get("_sbkey") or tool_context.state.get("user_id") or "default")
+        key = str(tool_context.state.get("_sbkey") or tool_context.user_id or "default")
         try:
             return await sbx.run_async(key, command, timeout)
         except Exception as e:  # noqa: BLE001 — 工具边界，统一回报给模型
@@ -189,7 +189,7 @@ def clarify(question: str, choices: list[str] | None = None) -> dict:
       若是开放式问题可不传。
 
     这是一个长时运行工具：调用后会暂停并等待用户回答，用户答复后你将
-    收到答案并据此继续。只在确有必要时使用，不要为已经清楚的需求反复发问。
+    收到答案并据此继续。**遇到任何不确定的信息都必须使用此工具向用户确认，禁止自行猜测用户意图。**
     """
     return {
         "status": "pending",
@@ -200,3 +200,123 @@ def clarify(question: str, choices: list[str] | None = None) -> dict:
 
 # 包装为长时运行工具：调用后挂起，等待用户通过 /chat/answer 回灌答复。
 clarify_tool = LongRunningFunctionTool(func=clarify)
+
+
+# ---------------------------------------------------------------------------
+# upload_to_sandbox — 上传文件到沙箱
+# ---------------------------------------------------------------------------
+def upload_to_sandbox(
+    sandbox_path: str,
+    content: str,
+    tool_context: ToolContext,
+    mode: int = 644,
+) -> dict:
+    """上传文件到当前租户的沙箱内。
+
+    适用于需要在沙箱中预置脚本、配置文件或数据文件的场景。
+    文件写入沙箱后，可通过 terminal 工具在沙箱中访问。
+
+    参数：
+    - sandbox_path: 沙箱内的目标路径（如 /scripts/my_tool.py）。
+    - content: 文件内容（纯文本）。
+    - mode: 文件权限（默认 644）。
+
+    返回 {"success": true} 或 {"error": str}。
+    """
+    from app import sandbox as sbx
+
+    if not sbx.enabled():
+        return {"error": "沙箱未启用，无法上传文件"}
+
+    key = str(tool_context.state.get("_sbkey") or tool_context.user_id or "default")
+    try:
+        sbx.write_file_sync(key, sandbox_path, content, mode)
+        return {"success": True, "path": sandbox_path}
+    except Exception as e:
+        return {"error": f"上传文件到沙箱失败: {e}"}
+
+
+# ---------------------------------------------------------------------------
+# ensure_sandbox_skills — 同步指定 skill 脚本到沙箱
+# ---------------------------------------------------------------------------
+def ensure_sandbox_skills(skill_name: str, tool_context: ToolContext) -> dict:
+    """确保当前租户的沙箱内已有指定 skill 的脚本文件。
+
+    首次使用某个 skill 前调用一次即可。会比对沙箱现有文件，仅同步缺失的文件。
+    同步后可通过 terminal 在沙箱中直接运行该 skill 的脚本。
+
+    参数：
+    - skill_name: 技能目录名（如 "bingsearch"、"arxiv-paper-search"）。
+
+    返回 {"success": true} 或 {"error": str}。
+    """
+    from app import sandbox as sbx
+
+    if not sbx.enabled():
+        return {"error": "沙箱未启用，无法同步 skill"}
+
+    if not skill_name or not skill_name.strip():
+        return {"error": "skill_name 不能为空"}
+
+    key = str(tool_context.state.get("_sbkey") or tool_context.user_id or "default")
+    try:
+        sbx.ensure_skills_sync(key, skill_name.strip())
+        return {"success": True, "message": f"skill '{skill_name}' 已同步到沙箱"}
+    except FileNotFoundError:
+        return {"error": f"本地不存在 skill '{skill_name}'"}
+    except Exception as e:
+        return {"error": f"同步 skill 到沙箱失败: {e}"}
+
+
+# ---------------------------------------------------------------------------
+# sync_upload_to_sandbox — 将用户已上传的文件同步到沙箱
+# ---------------------------------------------------------------------------
+def sync_upload_to_sandbox(
+    filename: str,
+    tool_context: ToolContext,
+    sandbox_path: str | None = None,
+) -> dict:
+    """将用户已上传的文件从服务器同步到当前租户的沙箱内。
+
+    适用于需要将用户上传的数据文件传入沙箱进行处理的场景。
+    调用前应先用 list_uploads 查看已上传文件列表。
+
+    参数：
+    - filename: 已上传的文件名（如 "data.csv"、"report.pdf"）。
+    - sandbox_path: 沙箱内的目标路径（默认 /uploads/<filename>）。
+      注意：沙箱内路径必须以 / 开头，如 "/workspace/data.csv"。
+
+    返回 {"success": true, "sandbox_path": "..."} 或 {"error": str}。
+    """
+    from app import sandbox as sbx
+
+    if not sbx.enabled():
+        return {"error": "沙箱未启用，无法同步文件"}
+
+    user_id = str(tool_context.state.get("_sbkey") or tool_context.user_id or "default")
+    user_dir = UPLOADS_DIR / user_id
+
+    if not user_dir.is_dir():
+        return {"error": f"用户 {user_id} 的上传目录不存在"}
+
+    safe_name = pathlib.Path(filename).name
+    src = user_dir / safe_name
+
+    if not src.is_file():
+        return {"error": f"文件 '{filename}' 不存在，请先上传"}
+
+    try:
+        resolved = src.resolve()
+        user_dir_resolved = user_dir.resolve()
+        if not str(resolved).startswith(str(user_dir_resolved)):
+            return {"error": "权限拒绝：禁止访问其他用户的上传目录"}
+    except (OSError, ValueError):
+        return {"error": "路径解析失败"}
+
+    target = sandbox_path or f"/uploads/{safe_name}"
+    try:
+        data = src.read_bytes()
+        sbx.write_file_sync(user_id, target, data, mode=644)
+        return {"success": True, "sandbox_path": target, "size": len(data)}
+    except Exception as e:
+        return {"error": f"同步文件到沙箱失败: {e}"}

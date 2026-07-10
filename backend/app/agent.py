@@ -43,7 +43,15 @@ from app.narrator import (
     after_tool_callback,
     before_tool_callback,
 )
-from app.tools import clarify_tool, terminal, todo, vision_analyze
+from app.tools import (
+    clarify_tool,
+    ensure_sandbox_skills,
+    sync_upload_to_sandbox,
+    terminal,
+    todo,
+    upload_to_sandbox,
+    vision_analyze,
+)
 
 load_dotenv()
 
@@ -134,6 +142,9 @@ root_agent = Agent(
         FunctionTool(todo),
         FunctionTool(terminal),
         FunctionTool(vision_analyze),
+        FunctionTool(upload_to_sandbox),
+        FunctionTool(sync_upload_to_sandbox),
+        # FunctionTool(ensure_sandbox_skills),
         clarify_tool,
     ],
     before_tool_callback=before_tool_callback,

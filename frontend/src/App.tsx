@@ -128,14 +128,65 @@ const EXAMPLE_QUESTIONS: ExampleQuestion[] = [
 
 // ─── 子组件 ──────────────────────────────────────────────────────────────────
 
-const Header = () => (
-  <header className="flex items-center gap-2 px-4 py-3 border-b border-slate-800 text-sm font-medium text-slate-300">
-    <Bot className="w-5 h-5 text-blue-400" />
-    <span className="font-semibold text-slate-200">arXiv</span>
-    <ChevronRight className="w-4 h-4 text-slate-500" />
-    <span className="text-slate-400">学术论文研究智能体</span>
-  </header>
-);
+function Header({
+  userId,
+  onUserIdChange,
+}: {
+  userId: string;
+  onUserIdChange: (id: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(userId);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  return (
+    <header className="flex items-center gap-2 px-4 py-3 border-b border-slate-800 text-sm font-medium text-slate-300">
+      <Bot className="w-5 h-5 text-blue-400" />
+      <span className="font-semibold text-slate-200">arXiv</span>
+      <ChevronRight className="w-4 h-4 text-slate-500" />
+      <span className="text-slate-400">学术论文研究智能体</span>
+      <div className="ml-auto flex items-center gap-2">
+        {editing ? (
+          <input
+            ref={inputRef}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onBlur={() => {
+              if (value.trim()) onUserIdChange(value.trim());
+              setEditing(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                if (value.trim()) onUserIdChange(value.trim());
+                setEditing(false);
+              }
+              if (e.key === 'Escape') {
+                setValue(userId);
+                setEditing(false);
+              }
+            }}
+            className="bg-[#0b0f19] border border-slate-700 rounded px-2 py-1 text-[13px] text-slate-200 outline-none w-36"
+          />
+        ) : (
+          <button
+            onClick={() => {
+              setValue(userId);
+              setEditing(true);
+            }}
+            className="flex items-center gap-1.5 text-[12px] text-slate-500 hover:text-slate-300 transition-colors bg-slate-800/40 hover:bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700/50"
+          >
+            <User className="w-3.5 h-3.5" />
+            {userId}
+          </button>
+        )}
+      </div>
+    </header>
+  );
+}
 
 function UserMessage({ text }: { text: string }) {
   return (
@@ -579,6 +630,7 @@ export default function App() {
   const [messages, setMessages] = useState<HistoryMessage[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [userId, setUserId] = useState('default_user');
 
   // 流式中间状态
   const [liveSteps, setLiveSteps] = useState<ToolStep[]>([]);
@@ -607,12 +659,12 @@ export default function App() {
 
   // 加载已有文件
   useEffect(() => {
-    listUploads()
+    listUploads(userId)
       .then((data) => {
         if (data.files) setUploadedFiles(data.files);
       })
       .catch(() => {});
-  }, []);
+  }, [userId]);
 
   // 自动滚底
   useEffect(() => {
@@ -641,10 +693,10 @@ export default function App() {
 
   // ─── 文件上传 ──────────────────────────────────────────────────────────
 
-  const doUpload = useCallback(async (file: File) => {
+  const doUpload = useCallback(async (file: File, uid?: string) => {
     setUploading(true);
     try {
-      const result = await uploadFile(file);
+      const result = await uploadFile(file, uid || userId);
       if (result.success) {
         setUploadedFiles((prev) => [
           ...prev,
@@ -679,7 +731,7 @@ export default function App() {
           const blob = await resp.blob();
           const fileName = ex.demoFile.split('/').pop()!;
           const file = new File([blob], fileName, { type: blob.type });
-          await doUpload(file);
+          await doUpload(file, userId);
         } catch (err) {
           console.error('Demo file upload failed:', err);
         } finally {
@@ -712,19 +764,19 @@ export default function App() {
 
   const handleClearFiles = useCallback(async () => {
     try {
-      await clearUploads();
+      await clearUploads(userId);
       setUploadedFiles([]);
     } catch (err) {
       console.error('Clear failed:', err);
     }
-  }, []);
+  }, [userId]);
 
   const handleRemoveFile = useCallback(
     async (fileName: string) => {
       setUploadedFiles((prev) => prev.filter((f) => f.name !== fileName));
-      await handleClearFiles();
+      await clearUploads(userId);
     },
-    [handleClearFiles],
+    [userId],
   );
 
   const formatSize = (bytes: number) => {
@@ -754,7 +806,7 @@ export default function App() {
     const finalTimeline = [...timelineRef.current];
     const steps = collectedStepsRef.current;
     const thoughts = collectedThoughtsRef.current;
-    if (finalText || steps.length > 0 || thoughts.length > 0) {
+    if (finalText || steps.length > 0 || thoughts.length > 0 || finalTimeline.length > 0) {
       const assistantMsg: HistoryMessage = {
         id: `assistant_${Date.now()}`,
         role: 'assistant',
@@ -940,14 +992,18 @@ export default function App() {
     abortRef.current = ac;
 
     try {
-      await processStream(streamChat(text, 'default_user', ac.signal));
+      await processStream(streamChat(text, userId, ac.signal));
+      // 流结束但未收到 'done' 事件时，手动收尾
+      if (!clarifyPendingRef.current) {
+        finalizeAssistant();
+      }
     } catch (err: unknown) {
       handleStreamError(err);
     } finally {
       setIsStreaming(false);
       abortRef.current = null;
     }
-  }, [input, isStreaming, uploadedFiles, processStream, handleStreamError]);
+  }, [input, isStreaming, uploadedFiles, processStream, handleStreamError, userId]);
 
   // 回答 clarify 澄清提问，续接同一 session
   const submitAnswer = useCallback(
@@ -961,7 +1017,7 @@ export default function App() {
       const ac = new AbortController();
       abortRef.current = ac;
       try {
-        await processStream(answerChat(c.session_id, c.call_id, answer, 'default_user', ac.signal));
+        await processStream(answerChat(c.session_id, c.call_id, answer, userId, ac.signal));
       } catch (err: unknown) {
         handleStreamError(err);
       } finally {
@@ -969,7 +1025,7 @@ export default function App() {
         abortRef.current = null;
       }
     },
-    [clarify, isStreaming, processStream, handleStreamError],
+    [clarify, isStreaming, processStream, handleStreamError, userId],
   );
 
   const handleStop = useCallback(() => {
@@ -999,7 +1055,7 @@ export default function App() {
 
   return (
     <div className="h-screen flex flex-col bg-[#0b0f19] font-sans selection:bg-blue-500/30">
-      <Header />
+      <Header userId={userId} onUserIdChange={setUserId} />
 
       <main className="flex-1 overflow-y-auto py-6">
         {/* 欢迎消息 */}

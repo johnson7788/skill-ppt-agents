@@ -420,7 +420,7 @@ def _fix_thought_spacing(text: str) -> str:
 # ---------------------------------------------------------------------------
 # 文件辅助
 # ---------------------------------------------------------------------------
-
+#TODO:修改为从沙盒获取？
 def _get_uploaded_files_info(user_id: str) -> list[dict]:
     user_dir = UPLOADS_DIR / user_id
     if not user_dir.exists():
@@ -470,6 +470,7 @@ async def _get_current_cards(user_id: str, session_id: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 # POST /upload
 # ---------------------------------------------------------------------------
+#TODO:修改为上传到模型沙盒？？？
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...), user_id: str = Form(default="default_user")):
     user_dir = UPLOADS_DIR / user_id
@@ -623,13 +624,15 @@ async def _run_agent_stream(session_id: str, user_id: str, new_message, emit, st
     ):
         if not event.content or not event.content.parts:
             continue
-        if getattr(event, "partial", True) is False:
+        if getattr(event, "partial", True) is False and not event.get_function_calls():
             continue
 
         # ---- clarify 优先检测（人在回路）----
         clarify_fc = None
         for p in event.content.parts:
             fc = getattr(p, "function_call", None)
+            if fc:
+                print('function calling')
             if fc and fc.name == "clarify":
                 clarify_fc = fc
                 break
@@ -668,6 +671,7 @@ async def _run_agent_stream(session_id: str, user_id: str, new_message, emit, st
                 elif hasattr(part, "text") and part.text:
                     summary_parts.append(part.text.strip())
                 elif hasattr(part, "function_call") and part.function_call:
+                    #调用前卡片
                     fc = part.function_call
                     cid = fc.id or str(uuid.uuid4())[:8]
                     call_entry = {
@@ -681,6 +685,7 @@ async def _run_agent_stream(session_id: str, user_id: str, new_message, emit, st
                     calls_out.append(call_entry)
                     pending_calls[cid] = step_id
                 elif hasattr(part, "function_response") and part.function_response:
+                    #调用后卡片
                     fr = part.function_response
                     rid = fr.id or ""
                     result_raw = fr.response or {}
@@ -838,6 +843,7 @@ async def chat_stream(message: str, user_id: str = "default_user"):
     # 检查缓存命中 → 快速回放缓存事件，跳过 LLM 调用
     cached_events = _sse_cache.get(full_message)
     if cached_events is not None:
+        #缓存命中的情况
         logger.info("SSE cache HIT: %.60s...", message)
         slog = SessionLogger(session.id, user_id, message)
         slog.log_event({"type": "cache_hit", "cached_event_count": len(cached_events)})

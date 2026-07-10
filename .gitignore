@@ -62,18 +62,6 @@ cache
 .claude/settings.local.json
 .next
 dist
-
-# 日志（可能含密钥/对话内容）
-logs/
-**/logs/
-*.jsonl
-
-# 会话数据库
-*.db
-.adk/
-**/.adk/
-
-# 用户上传文件（运行时产物）
-uploads/
-**/uploads/
-docs/migration-plan.md
+.codex
+backend/logs/
+backend/uploads/

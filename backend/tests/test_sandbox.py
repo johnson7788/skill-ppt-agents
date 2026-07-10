@@ -116,8 +116,9 @@ async def _test_release_kills_and_reacquires():
 def test_run_sync_bridges_to_loop():
     """同步入口 run_sync 应把协程投递到专用循环并阻塞拿到结果。"""
     from app import sandbox as sbx
-
+    asyncio.run(sbx.start_pool())
     sbx.manager._pool = _Pool()
+
     try:
         r = sbx.run_sync("u1", "echo hi", timeout=5)
         assert r["returncode"] == 0

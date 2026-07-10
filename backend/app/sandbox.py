@@ -12,9 +12,12 @@ from __future__ import annotations
 
 import asyncio
 import os
+import pathlib
 import threading
 import time
 from datetime import timedelta
+
+
 
 
 def _flag(name: str, default: str = "false") -> bool:
@@ -26,10 +29,11 @@ _POOL_SIZE = int(os.environ.get("SANDBOX_POOL_SIZE", "3"))
 _IMAGE = os.environ.get("SANDBOX_IMAGE", "python:3.12")
 _DOMAIN = os.environ.get("SANDBOX_DOMAIN", "localhost:8080")
 _PROTOCOL = os.environ.get("SANDBOX_PROTOCOL", "http")
-_API_KEY = os.environ.get("SANDBOX_API_KEY") or None
+_API_KEY = os.environ.get("SANDBOX_API_KEY") or "123456"
 _TTL_MIN = int(os.environ.get("SANDBOX_TIMEOUT_MINUTES", "30"))
 _IDLE_MIN = int(os.environ.get("SANDBOX_IDLE_MINUTES", "15"))
 
+_SKILLS_DIR = pathlib.Path(__file__).parent / "skills"
 _STDOUT_CAP = 8000
 _STDERR_CAP = 2000
 
@@ -60,7 +64,10 @@ class SandboxManager:
             max_idle=_POOL_SIZE,
             state_store=InMemoryAsyncPoolStateStore(),
             connection_config=conn,
-            creation_spec=PoolCreationSpec(image=_IMAGE),
+            creation_spec=PoolCreationSpec(
+                image=_IMAGE,
+                network_policy=None,  # null → allow-all，且不需要 egress sidecar
+            ),
         )
         await self._pool.start()
         self._reaper = asyncio.create_task(self._reap_loop())
@@ -93,6 +100,60 @@ class SandboxManager:
             sandbox = await self._pool.acquire(sandbox_timeout=self._ttl)
             self._by_key[key] = (sandbox, time.monotonic())
             return sandbox
+
+    async def file_exists(self, key: str, path: str) -> bool:
+        """检查沙箱内指定路径是否存在。"""
+        sandbox = await self._get(key)
+        try:
+            info = await sandbox.files.get_file_info([path])
+            return bool(info.get(path))
+        except Exception:
+            return False
+
+    async def ensure_skills(self, key: str, skill_name: str, skills_root: str = "skills") -> None:
+        """确保沙箱内有指定 skill 的脚本文件，缺失则从本地同步。"""
+        from opensandbox.models.filesystem import DirectoryListEntry, WriteEntry
+
+        sandbox = await self._get(key)
+        local_dir = _SKILLS_DIR / skill_name
+        if not local_dir.is_dir():
+            raise FileNotFoundError(f"本地 skill 目录不存在: {local_dir}")
+
+        sandbox_dir = f"{skills_root}/{skill_name}"
+        try:
+            existing = await sandbox.files.list_directory(
+                DirectoryListEntry(path=sandbox_dir, depth=2)
+            )
+            existing_paths = {e.path for e in existing}
+        except Exception:
+            existing_paths = set()
+
+        pend = asyncio.get_running_loop().run_in_executor
+        files = await pend(None, self._collect_scripts, local_dir, sandbox_dir)
+
+        entries = []
+        for path, data, mode in files:
+            if path not in existing_paths:
+                entries.append(WriteEntry(path=path, data=data, mode=mode))
+
+        if entries:
+            await sandbox.files.write_files(entries)
+
+    @staticmethod
+    def _collect_scripts(local_dir, prefix: str) -> list[tuple[str, str, int]]:
+        """扫描本地 skill 目录，返回 (沙箱路径, 内容, 权限) 列表。"""
+        files = []
+        for fpath in local_dir.rglob("*"):
+            if not fpath.is_file():
+                continue
+            rel = fpath.relative_to(local_dir)
+            files.append((f"{prefix}/{rel.as_posix()}", fpath.read_bytes(), 644))
+        return files
+
+    async def write_file(self, key: str, path: str, data: str | bytes, mode: int = 644) -> None:
+        """向租户沙箱内写入文件。"""
+        sandbox = await self._get(key)
+        await sandbox.files.write_file(path, data, mode=mode)
 
     async def run(self, key: str, command: str, timeout: int = 60) -> dict:
         """在租户沙箱内执行命令，返回 {stdout, stderr, returncode}。"""
@@ -157,6 +218,9 @@ def _ensure_loop() -> asyncio.AbstractEventLoop:
 
 
 def _submit(coro):
+    # 返回一个
+    # concurrent.futures.Future（线程安全的
+    # Future）。
     return asyncio.run_coroutine_threadsafe(coro, _ensure_loop())
 
 
@@ -191,3 +255,40 @@ async def run_async(key: str, command: str, timeout: int = 60) -> dict:
 def run_sync(key: str, command: str, timeout: int = 60) -> dict:
     """同步侧（ADK code_executor）入口：阻塞等待沙箱循环上的命令完成。"""
     return _submit(manager.run(key, command, timeout)).result(timeout=timeout + 30)
+
+
+async def write_file_async(key: str, path: str, data: str | bytes, mode: int = 644) -> None:
+    """异步侧入口：向租户沙箱写入文件。"""
+    await asyncio.wrap_future(_submit(manager.write_file(key, path, data, mode)))
+
+
+def write_file_sync(key: str, path: str, data: str | bytes, mode: int = 644) -> None:
+    """同步侧入口：向租户沙箱写入文件。"""
+    _submit(manager.write_file(key, path, data, mode)).result()
+
+
+def ensure_skills_sync(key: str, skill_name: str, timeout: int = 30) -> None:
+    """同步入口：确保沙箱内有指定 skill 的脚本文件。"""
+    _submit(manager.ensure_skills(key, skill_name)).result(timeout=timeout)
+
+
+def main():
+    # 1. 启动沙箱池（同步方式，因为 start_pool 是异步，我们这里用 asyncio.run）
+    asyncio.run(start_pool())
+
+    try:
+        # 2. 执行命令（同步阻塞）
+        key = "user_123"  # 租户标识，随意
+        command = 'python -c "print(\'hello world\')"'
+        result = run_sync(key, command, timeout=10)
+
+        print("执行结果：")
+        print("stdout:", result.get("stdout"))
+        print("stderr:", result.get("stderr"))
+        print("returncode:", result.get("returncode"))
+    finally:
+        # 3. 关闭池
+        asyncio.run(stop_pool())
+
+if __name__ == "__main__":
+    main()
