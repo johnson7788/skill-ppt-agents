@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, type ReactNode, type ChangeEvent, type DragEvent, type KeyboardEvent } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, type ReactNode, type ChangeEvent, type DragEvent, type KeyboardEvent } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Circle,
   FileText,
   HelpCircle,
   Loader2,
@@ -202,10 +203,21 @@ function UserMessage({ text }: { text: string }) {
 }
 
 function SubCallRow({ call }: { call: ToolCall }) {
-  const [expanded, setExpanded] = useState(false);
+  const [showResult, setShowResult] = useState(false);
   const hasArgs = call.args_summary && call.args_summary.length > 0;
   const hasResult = call.result_summary && call.result_summary.length > 0;
-  const hasDetail = hasArgs || hasResult;
+
+  // todo 工具：尝试解析 todos 数据
+  const isTodo = call.tool_name === 'todo';
+  const todos: TodoItem[] | null = useMemo(() => {
+    if (!isTodo || !call.result_summary) return null;
+    try {
+      const parsed = JSON.parse(call.result_summary);
+      return Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }, [isTodo, call.result_summary]);
 
   return (
     <div className="py-1.5">
@@ -230,66 +242,110 @@ function SubCallRow({ call }: { call: ToolCall }) {
         >
           {call.status === 'running' ? '执行中...' : call.status === 'error' ? '错误' : '完成'}
         </span>
-        {hasDetail && (
+        {!isTodo && hasResult && (
           <button
             className="ml-auto text-[11px] text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-0.5"
-            onClick={() => setExpanded(!expanded)}
+            onClick={() => setShowResult(!showResult)}
           >
-            {expanded ? (
+            {showResult ? (
               <>
                 <ChevronDown className="w-3 h-3" />
-                收起
+                收起结果
               </>
             ) : (
               <>
                 <ChevronRight className="w-3 h-3" />
-                查看详情
+                查看结果
               </>
             )}
           </button>
         )}
       </div>
-      {expanded && hasDetail && (
-        <div className="mt-2 ml-5.5 space-y-2">
-          {hasArgs && (
-            <div>
-              <div className="text-[11px] text-slate-500 mb-1 font-medium">输入参数</div>
-              <pre className="text-[12px] text-slate-400 bg-slate-900/50 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-all font-mono leading-relaxed max-h-80 overflow-y-auto">
-                {tryFormatJson(call.args_summary)}
-              </pre>
-            </div>
-          )}
-          {hasResult && (
-            <div>
-              <div className="text-[11px] text-slate-500 mb-1 font-medium">返回结果</div>
-              <pre className={`text-[12px] rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-all font-mono leading-relaxed max-h-80 overflow-y-auto ${
-                call.status === 'error'
-                  ? 'bg-red-950/30 text-red-300'
-                  : 'bg-slate-900/50 text-slate-400'
-              }`}>
-                {tryFormatJson(call.result_summary!)}
-              </pre>
-            </div>
-          )}
+
+      {/* 推理说明（始终显示） */}
+      {hasArgs && (
+        <div className="mt-1.5 ml-5.5 text-[13px] text-slate-400 leading-relaxed">
+          {call.args_summary}
+        </div>
+      )}
+
+      {/* todo 工具：渲染待办列表 */}
+      {isTodo && call.status !== 'running' && todos && (
+        <div className="mt-2 ml-5.5">
+          <TodoCard todos={todos} />
+        </div>
+      )}
+
+      {/* 返回结果（可展开） */}
+      {!isTodo && showResult && hasResult && (
+        <div className="mt-2 ml-5.5">
+          <pre className={`text-[12px] rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-all font-mono leading-relaxed max-h-80 overflow-y-auto ${
+            call.status === 'error'
+              ? 'bg-red-950/30 text-red-300'
+              : 'bg-slate-900/50 text-slate-400'
+          }`}>
+            {call.result_summary}
+          </pre>
         </div>
       )}
     </div>
   );
 }
 
-/** 尝试格式化 JSON 字符串，如果不是有效 JSON 则原样返回 */
-function tryFormatJson(text: string): string {
-  try {
-    const parsed = JSON.parse(text);
-    return JSON.stringify(parsed, null, 2);
-  } catch {
-    return text;
+// ─── 待办列表卡片 ──────────────────────────────────────────────────────────
+
+interface TodoItem {
+  id: string;
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+}
+
+function TodoIcon({ status }: { status: TodoItem['status'] }) {
+  switch (status) {
+    case 'completed':
+      return <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />;
+    case 'in_progress':
+      return <Loader2 className="w-4 h-4 text-blue-400 animate-spin shrink-0" />;
+    case 'cancelled':
+      return <XCircle className="w-4 h-4 text-slate-500 shrink-0" />;
+    default:
+      return <Circle className="w-4 h-4 text-slate-500 shrink-0" />;
   }
+}
+
+function TodoCard({ todos }: { todos: TodoItem[] }) {
+  return (
+    <div className="space-y-1.5">
+      {todos.map((t) => (
+        <div
+          key={t.id}
+          className={`flex items-start gap-2.5 px-3 py-2 rounded-lg text-[13px] ${
+            t.status === 'completed'
+              ? 'text-slate-400 line-through'
+              : t.status === 'cancelled'
+                ? 'text-slate-500 line-through'
+                : t.status === 'in_progress'
+                  ? 'text-slate-200 bg-blue-500/5 border border-blue-500/10'
+                  : 'text-slate-300'
+          }`}
+        >
+          <TodoIcon status={t.status} />
+          <span className="leading-snug">{t.content}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function ToolStepCard({ step }: { step: ToolStep }) {
   const [open, setOpen] = useState(true);
   const hasRunning = step.calls.some((c) => c.status === 'running');
+
+  // 从子调用中归纳卡片标题
+  const toolNames = [...new Set(step.calls.map((c) => c.display_name))];
+  const title = toolNames.length <= 2
+    ? toolNames.join(' + ')
+    : `${toolNames[0]} + 等 ${toolNames.length - 1} 个工具`;
 
   return (
     <div className="bg-[#151b28] border border-slate-800/80 rounded-xl overflow-hidden">
@@ -308,7 +364,7 @@ function ToolStepCard({ step }: { step: ToolStep }) {
           ) : (
             getToolIcon(step.calls[0]?.tool_name || '')
           )}
-          <span className="font-medium line-clamp-2">{step.summary}</span>
+          <span className="font-medium">{title}</span>
         </div>
         <div className="text-[13px] text-slate-500">{step.call_count} 次调用</div>
       </div>

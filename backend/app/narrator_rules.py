@@ -86,6 +86,12 @@ TOOL_LABELS: dict[str, dict[str, str]] = {
         "icon": "❓",
         "detail": "向你确认关键信息，以便给出更准确的结果",
     },
+    # 技能执行工具
+    "run_skill_script": {
+        "label": "执行技能脚本",
+        "icon": "🖥️",
+        "detail": "执行论文检索或网页搜索的技能脚本",
+    },
     # 通用 fallback 模式
     "_search": {
         "label": "搜索信息",

@@ -1,3 +1,15 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+.eggs/
+*.egg-info/
+.idea/
+.vscode/
+medical_skills/report.docx
+medical_skills/report.html
+medical_skills/report.md
+
 # Compiled class file
 *.class
 
@@ -62,6 +74,20 @@ cache
 .claude/settings.local.json
 .next
 dist
+
+# 日志（可能含密钥/对话内容）
+logs/
+**/logs/
+*.jsonl
+
+# 会话数据库
+*.db
+.adk/
+**/.adk/
+
+# 用户上传文件（运行时产物）
+uploads/
+**/uploads/
 .codex
 backend/logs/
 backend/uploads/

@@ -32,10 +32,11 @@ _MAX_ITEMS = 256
 _MAX_CONTENT = 4000
 
 
-def todo(tool_context: ToolContext, todos: list[dict] | None = None) -> dict:
+def todo(tool_context: ToolContext, description: str = "", todos: list[dict] | None = None) -> dict:
     """管理本次任务的待办清单，用于拆解复杂任务并跟踪进度。
 
     用法：
+    - description: 操作目的
     - 传入 todos 写入/覆盖整张清单；不传则只读取当前清单。
     - 每个待办项为 {"id": str, "content": str, "status": "..."}，
       status 取值：pending / in_progress / completed / cancelled。
@@ -68,13 +69,14 @@ _TERMINAL_MAX_STDOUT = 8000
 _TERMINAL_MAX_STDERR = 2000
 
 
-async def terminal(command: str, tool_context: ToolContext, timeout: int = 60) -> dict:
+async def terminal(description: str = "", command: str = "", tool_context: ToolContext | None = None, timeout: int = 60) -> dict:
     """执行 shell 命令并返回输出。
 
     适用于查看文件、运行构建/检索脚本、查询系统信息等。
     命令在当前租户的隔离沙箱中执行（多租户互不干扰）；未启用沙箱时在服务器本地执行。
 
     参数：
+    - description: 操作目的
     - command: 要执行的 shell 命令。
     - timeout: 超时秒数（默认 60）。
 
@@ -127,12 +129,17 @@ _IMAGE_MIME = {
 }
 
 
-def vision_analyze(image: str, prompt: str = "描述这张图片的内容，并识别其中的文字") -> dict:
+def vision_analyze(description: str = "", image: str = "", prompt: str = "描述这张图片的内容，并识别其中的文字") -> dict:
     """分析图片内容或对图片做 OCR 文字识别。
 
     适用于用户上传了图片（如截图、图表、扫描件、含文字的图片）需要理解或提取文字的场景。
     image 可以是 http(s) 图片 URL，或用户已上传的图片文件名（位于 uploads 目录）。
     prompt 描述你想从图片中获取什么信息（如"提取图中表格数据"、"这是什么模型结构图"）。
+
+    参数：
+    - description: 操作目的
+    - image: 图片 URL 或已上传的文件名。
+    - prompt: 分析提示词（可选）。
 
     返回 {"analysis": str}，失败返回 {"error": str}。
     """

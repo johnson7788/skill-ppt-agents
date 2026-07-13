@@ -556,3 +556,5 @@ TOOL_LABELS = {
 
 ---
 
+## 联系作者
+![weichat.png](docs/weichat.png)

@@ -61,6 +61,7 @@ from pydantic import BaseModel
 from app.agent import root_agent, UPLOADS_DIR
 from app.file_reader import read_file
 from app.narrator import _explain_thinking, get_narrator_cards
+from app.narrator_rules import TOOL_LABELS
 
 # ---------------------------------------------------------------------------
 APP_NAME = "arxiv-research-agent"
@@ -334,12 +335,25 @@ def _extract_tool_info(event) -> dict | None:
         # function_call
         if hasattr(part, "function_call") and part.function_call:
             fc = part.function_call
-            args_str = json.dumps(fc.args or {}, ensure_ascii=False)
+            args = fc.args or {}
+            # 优先使用工具参数中的 description（LLM 填写的操作目的）
+            desc = (args.get("description") or "").strip()
+            if not desc:
+                reasoning = " ".join(step_summary_parts)
+                if reasoning:
+                    desc = reasoning
+                elif fc.name == "run_skill_script":
+                    skill = (args.get("skill_name") or args.get("name") or "").replace("-", " ")
+                    desc = f"运行技能：{skill}" if skill else "执行技能脚本"
+                elif fc.name == "todo":
+                    todos = args.get("todos")
+                    count = len(todos) if isinstance(todos, list) else 0
+                    desc = f"规划 {count} 项任务" if count else "查询任务进度"
             calls.append({
                 "id": fc.id or str(uuid.uuid4())[:8],
                 "tool_name": fc.name,
                 "display_name": _friendly_tool_name(fc.name),
-                "args_summary": args_str,
+                "args_summary": desc,
                 "status": "running",
                 "result_summary": None,
             })
@@ -348,8 +362,15 @@ def _extract_tool_info(event) -> dict | None:
         if hasattr(part, "function_response") and part.function_response:
             fr = part.function_response
             result_raw = fr.response or {}
-            result_str = json.dumps(result_raw, ensure_ascii=False)
             status = "error" if _is_error_result(result_raw) else "done"
+            if fr.name == "todo":
+                todos = result_raw.get("todos", [])
+                result_str = json.dumps(todos, ensure_ascii=False)
+            else:
+                stdout = result_raw.get("stdout", b"")
+                if isinstance(stdout, bytes):
+                    stdout = stdout.decode("utf-8", errors="ignore")
+                result_str = stdout[:10000]
             calls.append({
                 "id": fr.id or str(uuid.uuid4())[:8],
                 "tool_name": fr.name,
@@ -384,8 +405,19 @@ def _friendly_tool_name(raw: str) -> str:
         "execute_code": "运行代码",
         "vision_analyze": "图片分析",
         "clarify": "请求澄清",
+        "run_skill_script": "执行技能脚本",
+        "list_skills": "查看可用技能",
+        "load_skill_resource": "加载参考资料",
     }
     return mapping.get(raw, raw)
+
+
+def _tool_description(tool_name: str) -> str:
+    """从 TOOL_LABELS 获取工具的人类可读描述。"""
+    info = TOOL_LABELS.get(tool_name)
+    if info:
+        return info.get("detail", "")
+    return _friendly_tool_name(tool_name)
 
 
 def _is_error_result(result: dict) -> bool:
@@ -671,26 +703,49 @@ async def _run_agent_stream(session_id: str, user_id: str, new_message, emit, st
                 elif hasattr(part, "text") and part.text:
                     summary_parts.append(part.text.strip())
                 elif hasattr(part, "function_call") and part.function_call:
-                    #调用前卡片
                     fc = part.function_call
                     cid = fc.id or str(uuid.uuid4())[:8]
+                    args = fc.args or {}
+                    # 优先使用工具参数中的 description（LLM 填写的操作目的）
+                    desc = (args.get("description") or "").strip()
+                    if not desc:
+                        reasoning = " ".join(summary_parts)
+                        if reasoning:
+                            desc = reasoning
+                        elif fc.name == "run_skill_script":
+                            skill = (args.get("skill_name") or args.get("name") or "").replace("-", " ")
+                            desc = f"运行技能：{skill}" if skill else "执行技能脚本"
+                        elif fc.name == "todo":
+                            todos = args.get("todos")
+                            count = len(todos) if isinstance(todos, list) else 0
+                            desc = f"规划 {count} 项任务" if count else "查询任务进度"
                     call_entry = {
                         "id": cid,
                         "tool_name": fc.name,
                         "display_name": _friendly_tool_name(fc.name),
-                        "args_summary": json.dumps(fc.args or {}, ensure_ascii=False),
+                        "args_summary": desc,
                         "status": "running",
                         "result_summary": None,
                     }
                     calls_out.append(call_entry)
                     pending_calls[cid] = step_id
                 elif hasattr(part, "function_response") and part.function_response:
-                    #调用后卡片
                     fr = part.function_response
                     rid = fr.id or ""
                     result_raw = fr.response or {}
-                    result_str = json.dumps(result_raw, ensure_ascii=False)
                     status = "error" if _is_error_result(result_raw) else "done"
+
+                    # todo 工具：传递结构化数据让前端渲染待办列表
+                    if fr.name == "todo":
+                        todos = result_raw.get("todos", [])
+                        result_str = json.dumps(todos, ensure_ascii=False)
+                    else:
+                        # 普通工具：纯文本截断
+                        stdout = result_raw.get("stdout", b"")
+                        if isinstance(stdout, bytes):
+                            stdout = stdout.decode("utf-8", errors="ignore")
+                        result_str = stdout[:10000]
+
                     call_entry = {
                         "id": rid,
                         "tool_name": fr.name,
@@ -711,6 +766,7 @@ async def _run_agent_stream(session_id: str, user_id: str, new_message, emit, st
                         del pending_calls[rid]
 
             if calls_out:
+                #TODO：需要把 calls_out参数换掉
                 summary = " ".join(summary_parts) or _friendly_tool_name(calls_out[0]["tool_name"])
                 yield emit({
                     "type": "tool_step",
@@ -745,7 +801,7 @@ async def _run_agent_stream(session_id: str, user_id: str, new_message, emit, st
                             "id": cid,
                             "tool_name": "execute_code",
                             "display_name": "运行代码",
-                            "args_summary": (ec.code or "")[:2000],
+                            "args_summary": f"Python 代码 ({len(ec.code or '')} 字符)",
                             "status": "running",
                             "result_summary": None,
                         }],
@@ -768,7 +824,7 @@ async def _run_agent_stream(session_id: str, user_id: str, new_message, emit, st
                             "step_id": step_id,
                             "call_id": rid,
                             "status": status,
-                            "result_summary": json.dumps({"output": output[:4000]}, ensure_ascii=False),
+                            "result_summary": output[:4000],
                         })
             continue
 
