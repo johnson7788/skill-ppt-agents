@@ -1,7 +1,7 @@
 """Sandbox 真实集成测试 — 需要 OpenSandbox 服务 + Docker。
 
 前置条件：
-  1. conda activate yunding-agent
+  1. conda activate skill-ppt-agent
   2. OpenSandbox 服务已启动：uvx opensandbox-server
   3. .env 里 SANDBOX_ENABLED=true
 
