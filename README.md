@@ -597,3 +597,9 @@ TOOL_LABELS = {
 
 ## 联系作者
 ![weichat.png](docs/weichat.png)
+
+---
+
+## 致谢
+
+PPT 生成功能参考了 [dashi-ppt-skill](https://github.com/chuspeeism/dashi-ppt-skill) 的风格预设与出图提示词设计，感谢开源贡献。
