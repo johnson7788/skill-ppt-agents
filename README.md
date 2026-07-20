@@ -1,6 +1,6 @@
-# 多租户skill Agent
+# PPT 生成智能体
 
-基于 Google ADK + DeepSeek 构建的学术论文研究智能体，支持**arXiv 论文检索、网页搜索、文件上传问答**，并内置**任务规划、终端执行、代码执行、图片分析（OCR）、人在回路澄清**等智能体能力。通过**旁路解说架构**将 Agent 的工具调用与思考过程翻译为通俗易懂的中文卡片，让非技术用户也能理解 AI 的分析过程。
+基于 Google ADK + DeepSeek 构建的多功能智能体，支持**图片型 PPT 生成（12 种预设风格）、arXiv 论文检索、网页搜索、文件上传问答**，并内置**任务规划、终端执行、代码执行、图片分析（OCR）、人在回路澄清**等智能体能力。通过**旁路解说架构**将 Agent 的工具调用与思考过程翻译为通俗易懂的中文卡片，让非技术用户也能理解 AI 的分析过程。
 
 ---
 
@@ -8,6 +8,7 @@
 
 | 功能 | 说明 |
 |------|------|
+| **图片型 PPT 生成** | 选风格 / 传模版 · 一句话生成整套演示 · 图片型 16:9 幻灯片；12 种预设风格（科研答辩、麦肯锡、党政红等），每页由 qwen-image 生成一整张视觉统一的图，组装为可下载的 `.pptx` |
 | **arXiv 论文检索** | 接入 arXiv 公开 API，支持按相关性/最新提交并行检索、按分类/作者检索、自由检索表达式 |
 | **网页搜索** | 自建 SearXNG 实例，支持通用/新闻/图片/视频搜索，自动重试与诊断 |
 | **文件上传问答** | 支持 PDF、PPTX、PPT、TXT 文件上传，自动提取内容并带位置标记（`[第X页]`、`[幻灯片X]`）注入 LLM 上下文 |
@@ -136,10 +137,11 @@
 
 ## 智能体能力（工具）
 
-除两个检索技能（arXiv 论文检索、网页搜索）外，Agent 还内置以下通用工具，定义在 `backend/app/tools.py`，并在 `backend/app/agent.py` 中注册：
+除三个技能（arXiv 论文检索、网页搜索、PPT 生成）外，Agent 还内置以下通用工具，定义在 `backend/app/tools.py`，并在 `backend/app/agent.py` 中注册：
 
 | 工具 | 类型 | 说明 |
 |------|------|------|
+| `generate_ppt` | PPT 生成 | 图片型 PPT：模型规划提纲并为每页写出图提示词 → qwen-image 逐页出图 → python-pptx 组装 16:9 `.pptx`，返回下载链接。支持 12 种预设风格（科研答辩风、麦肯锡风格、党政红等） |
 | `todo` | 任务规划 | 拆解复杂任务为待办清单并跟踪进度，状态存于会话 state（单轮会话内有效） |
 | `terminal` | 终端执行 | `subprocess` 执行 shell 命令，返回 stdout/stderr/returncode（高权限，请在受信部署边界内使用） |
 | `execute_code` | 代码执行 | Google ADK 内置 `UnsafeLocalCodeExecutor`，自动编写并运行 Python 代码处理数据/计算 |
@@ -166,15 +168,49 @@ SSE 续接（text / thought / tool_step ... / done），无缝继续执行
 
 ### 演示示例
 
-前端欢迎页内置了覆盖上述能力的示例问题，点击即可体验（带文件的示例会自动上传内置 demo 文件）：
+前端欢迎页内置了覆盖各项能力的示例问题，点击即可体验（带文件的示例会自动上传内置 demo 文件）：
 
 | 示例问题 | 演示能力 |
 |----------|---------|
+| 把大语言模型的发展脉络做成一套 12 页 PPT | generate_ppt（图片型 PPT 生成） |
+| 生成一份「MoE 架构」的教学幻灯片 | generate_ppt + arXiv 检索 |
+| 根据这份讲义生成一套演示文稿 | generate_ppt + 文件上传（自动上传 demo PPT） |
 | 帮我对比一下**这两个方向**的代表性工作，给出选型建议 | clarify（未指明对象 → 反问澄清） |
 | 系统调研扩散语言模型的发展脉络，分阶段梳理并形成综述 | todo（多步任务规划） |
-| 检索 MoE 论文并用 Python 统计其按年份的数量分布 | execute_code（代码执行） |
-| 看看服务器运行环境：Python 版本和主要科学计算库 | terminal（终端执行） |
 | 识别这张基准测试结果表中的数据，并补充该评测的代表性论文 | vision/OCR（自动上传图片） |
+
+---
+
+## PPT 生成
+
+核心 PPT 生成流程：LLM 规划提纲 → 为每页写一段出图提示词 → 调用阿里 DashScope `qwen-image` 异步 API 逐页渲染 16:9 整图 → `python-pptx` 组装为 `.pptx`（含演讲备注）→ 返回下载链接。
+
+### 预设风格（12 种）
+
+科研答辩风、麦肯锡风格、清爽专业风、数据仪表盘风、党政红风格、教学课件风、温暖手工风、手绘白板风、手绘技术解释风、电子墨水杂志风、创意杂志风、复古扁平插画风。
+
+前端提供下拉选择，选定后风格描述自动注入每页出图提示词。
+
+### 工作流程
+
+```
+用户："做一套 LLM 发展史 PPT，麦肯锡风格"
+    │
+    ▼  Agent load_skill("ppt-deck") 获取分步指导
+Agent 规划提纲，为每页写英文出图 prompt + 中文演讲备注
+    │
+    ▼  Agent 调用 generate_ppt(slides=[...], style="麦肯锡风格")
+后端线程：逐页调用 qwen-image 异步出图（每页约 30-60s）
+    │
+    ▼  python-pptx 组装 16:9 幻灯片（铺满整图 + 演讲备注）
+返回 download_url → Agent 以 markdown 链接给用户下载
+```
+
+### 设计要点
+
+- **出图在后端本地跑**，不进沙箱——沙箱镜像没有 `python-pptx`，也没有把产物拉回宿主机的通道
+- **qwen-image 无负向提示词**：写"不要浏览器"反而会把浏览器画出来，所以只写正向约束
+- **页数上限 20 页**，避免生成时间过长
 
 ---
 
@@ -215,7 +251,7 @@ SSE 续接（text / thought / tool_step ... / done），无缝继续执行
 ## 项目结构
 
 ```
-arxiv-research-agent/
+skill-ppt-agents/
 ├── .env                          # 环境变量（API Key、端口等）
 ├── Dockerfile                    # 生产镜像（Python 3.12 + Node 20 + Gunicorn）
 ├── docker-compose.yml            # 容器编排（2 CPU、2G RAM）
@@ -223,16 +259,15 @@ arxiv-research-agent/
 ├── prepare.sh                    # 沙箱一次性准备（拉 execd、构建 my-sandbox、写服务端配置）
 ├── start_sandbox.sh              # 启动 OpenSandbox 服务端（幂等）
 ├── start.sh                      # 本地开发一键启动（后端 + 前端）
-├── start_manage.sh               # 管理服务一键启动（管理后端 + 管理前端）
 ├── deploy.sh                     # 生产部署（git pull → docker build → 健康检查）
 │
 ├── backend/
 │   ├── pyproject.toml            # Python 依赖（hatchling 构建）
-│   ├── server.py                 # FastAPI 服务端（SSE 流式、文件上传、缓存）
+│   ├── server.py                 # FastAPI 服务端（SSE 流式、文件上传、缓存、文件下载）
 │   ├── client.py                 # CLI 客户端（模拟前端，消费 SSE）
 │   ├── app/
 │   │   ├── agent.py              # Agent 定义（DeepSeek + 技能 + 工具 + 回调）
-│   │   ├── tools.py             # 自定义工具：todo / terminal / vision_analyze / clarify
+│   │   ├── tools.py             # 自定义工具：generate_ppt / todo / terminal / vision_analyze / clarify
 │   │   ├── sandbox.py           # 多租户沙箱隔离（OpenSandbox 预热池 + 每租户独占 + 闲置回收）
 │   │   ├── create_model.py      # 模型工厂（10+ 供应商，统一走 LiteLLM）
 │   │   ├── narrator.py           # 旁路解说回调逻辑（三回调 + 格式化）
@@ -241,17 +276,18 @@ arxiv-research-agent/
 │   │   ├── instruction.md       # Agent 系统提示词（中文）
 │   │   └── skills/
 │   │       ├── arxiv-paper-search/       # arXiv 学术论文检索
-│   │       └── bingsearch/               # Bing 网页搜索
+│   │       ├── bingsearch/               # Bing 网页搜索
+│   │       └── ppt-deck/                # 图片型 PPT 生成（12 种预设风格）
 │   ├── cache/                    # SSE 响应缓存（JSON 文件）
 │   ├── logs/                     # 会话日志（JSONL）
-│   └── uploads/                  # 用户上传文件
+│   └── uploads/                  # 用户上传文件 + 生成的 PPT
 │
 ├── frontend/
 │   ├── package.json              # Node 依赖
 │   ├── vite.config.ts
 │   ├── public/demo/             # 内置演示文件（PPT、基准结果表图片）
 │   └── src/
-│       ├── App.tsx               # 主界面（时间线、工具卡片、思考卡片、澄清卡片、Markdown）
+│       ├── App.tsx               # 主界面（时间线、工具卡片、思考卡片、澄清卡片、PPT 风格选择、Markdown）
 │       ├── api.ts                # SSE 客户端（streamChat/answerChat）、文件上传/列表/清理 API
 │       └── index.css             # Tailwind + 自定义样式
 │
@@ -344,6 +380,7 @@ TEST_SERVER_URL=http://host:port pytest . -v  # 对远程服务器测试
 | `POST` | `/upload` | **上传文件**（multipart: `file` + `user_id`） |
 | `GET` | `/uploads?user_id=...` | **列出用户上传的文件** |
 | `DELETE` | `/uploads?user_id=...` | **清理用户所有上传文件** |
+| `GET` | `/download?user_id=...&file=...` | **下载产物文件**（如生成的 `.pptx`），仅限 `uploads/<user_id>/` 内 |
 | `GET` | `/cache/info` | **缓存统计信息** |
 | `DELETE` | `/cache` | **清空 SSE 缓存** |
 | `GET` | `/health` | **健康检查** |
@@ -393,6 +430,7 @@ TEST_SERVER_URL=http://host:port pytest . -v  # 对远程服务器测试
 | **思考过程卡片** | 可折叠，摘要显示翻译后中文，展开查看原始思考 |
 | **澄清卡片** | clarify 人在回路：渲染问题 + 选项按钮 + 自由输入，回答后续接同一会话 |
 | **文件上传** | 拖拽 + 点击上传，支持 PDF/PPTX/PPT/TXT 及图片（OCR） |
+| **PPT 模版风格** | 12 种预设风格下拉选择（科研答辩风、麦肯锡风格等），选中后自动注入生成指令 |
 | **Markdown 渲染** | 表格、代码块、链接完整支持（react-markdown + remark-gfm） |
 | **可中断** | 停止按钮，随时中止流式请求 |
 | **动画** | Framer Motion (motion) 过渡动画 |
@@ -472,6 +510,7 @@ cd manage_frontend && npm install && npm run dev               # 管理前端（
 | 变量 | 说明 |
 |------|------|
 | `DEEPSEEK_API_KEY` | DeepSeek API 密钥 |
+| `DASHSCOPE_API_KEY` | 阿里 DashScope API 密钥（PPT 生成需要，用于 qwen-image 出图） |
 
 ### 可选
 

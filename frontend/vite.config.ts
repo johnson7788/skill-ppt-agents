@@ -20,6 +20,7 @@ export default defineConfig({
       '/chat': 'http://localhost:8585',
       '/upload': 'http://localhost:8585',
       '/uploads': 'http://localhost:8585',
+      '/download': 'http://localhost:8585',
     },
   },
 });

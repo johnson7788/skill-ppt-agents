@@ -327,3 +327,175 @@ def sync_upload_to_sandbox(
         return {"success": True, "sandbox_path": target, "size": len(data)}
     except Exception as e:
         return {"error": f"同步文件到沙箱失败: {e}"}
+
+
+# ---------------------------------------------------------------------------
+# generate_ppt — 图片型 PPT 生成（qwen-image 逐页出图 + python-pptx 组装）
+# ---------------------------------------------------------------------------
+# 每页是一整张 16:9 生成图，最后组装成 .pptx。图片后端用阿里 DashScope
+# qwen-image（异步任务）。生成+组装是纯确定性活，放在后端本地跑（后端已带
+# requests + python-pptx，且能直接写 uploads/ 供下载），不进沙箱——沙箱镜像
+# 没有 python-pptx，也没有把产物拉回宿主机的通道。
+_QWEN_IMAGE_API = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
+_QWEN_IMAGE_TASK = "https://dashscope.aliyuncs.com/api/v1/tasks/"
+_PPT_MAX_SLIDES = 20
+# qwen-image 无负向提示词：写"不要浏览器"反而会把浏览器画出来，所以只写正向约束。
+_PPT_QUALITY_RULES = (
+    "16:9 full-slide PowerPoint image. No watermark, no color codes or hex text, "
+    "no page numbers, no scaffolding labels. No browser chrome, no application "
+    "toolbar or menu bar, no window frame, no address bar. Render every Chinese character crisply "
+    "and correctly in a clean Chinese sans-serif; keep any latin terms spelled exactly."
+)
+# 预设风格 → 英文视觉描述（注入每页出图提示词）。风格取自 codex-ppt references。
+_STYLE_PRESETS: dict[str, str] = {
+    "科研答辩风": "formal Chinese academic research-defense style, clean white background, deep academic blue structure, research-blue accents, pale-blue fills, one formal-red emphasis, precise alignment",
+    "麦肯锡风格": "McKinsey consulting style, clean white background, navy and steel-blue palette, minimal, strong grid, thin horizontal dividers, one accent color, data-driven",
+    "清爽专业风": "clean professional style, white background, soft blue and light-gray palette, generous whitespace, rounded cards, modern sans-serif",
+    "数据仪表盘风": "data dashboard style, deep navy background, cyan and teal accents, KPI cards, charts and gridlines, modern",
+    "党政红风格": "Chinese government report style, warm red and gold palette, cream background, solemn formal banner headers",
+    "教学课件风": "classroom courseware style, bright friendly blue and orange palette, clear headings, simple diagrams, approachable",
+    "温暖手工风": "warm handcraft style, cream paper background, warm earth tones, soft rounded shapes, cozy",
+    "手绘白板风": "hand-drawn whiteboard style, white background, black marker outlines, sketchy hand-drawn diagrams, a few accent colors",
+    "手绘技术解释风": "hand-drawn technical explainer style, off-white background, ink line-art diagrams, muted accent colors, annotated",
+    "电子墨水杂志风": "e-ink magazine style, warm paper background, monochrome black-and-cream with one accent, editorial serif headings, calm",
+    "创意杂志风": "creative magazine editorial style, bold color blocks, large expressive typography, asymmetric layout, vivid",
+    "复古扁平插画风": "retro flat illustration style, muted vintage palette, simple flat shapes, textured background, mid-century",
+}
+_DEFAULT_STYLE = "科研答辩风"
+
+
+def _qwen_gen_image(prompt: str, out_path: str, key: str, size: str = "1664*928") -> None:
+    """调 qwen-image 异步任务出一张图并下载到 out_path。失败抛异常。"""
+    import json
+    import time
+    import urllib.request
+
+    def _req(url, body=None, extra=None):
+        data = json.dumps(body).encode() if body is not None else None
+        r = urllib.request.Request(url, data=data, method="POST" if body else "GET")
+        r.add_header("Authorization", f"Bearer {key}")
+        if body is not None:
+            r.add_header("Content-Type", "application/json")
+        for k, v in (extra or {}).items():
+            r.add_header(k, v)
+        with urllib.request.urlopen(r, timeout=120) as resp:
+            return json.loads(resp.read())
+
+    sub = _req(
+        _QWEN_IMAGE_API,
+        {"model": "qwen-image", "input": {"prompt": prompt},
+         "parameters": {"size": size, "n": 1, "prompt_extend": False, "watermark": False}},
+        {"X-DashScope-Async": "enable"},
+    )
+    tid = sub["output"]["task_id"]
+    for _ in range(60):
+        time.sleep(5)
+        res = _req(_QWEN_IMAGE_TASK + tid)
+        st = res["output"]["task_status"]
+        if st == "SUCCEEDED":
+            url = res["output"]["results"][0]["url"]
+            urllib.request.urlretrieve(url, out_path)
+            return
+        if st in ("FAILED", "UNKNOWN"):
+            raise RuntimeError(f"qwen-image 任务 {st}: {res.get('output')}")
+    raise TimeoutError("qwen-image 任务超时")
+
+
+def _assemble_pptx(image_paths: list[str], notes: list[str], out_path: str) -> None:
+    """把每张图铺满一页 16:9 幻灯片，写入演讲备注，保存 .pptx。"""
+    from pptx import Presentation
+    from pptx.util import Inches
+
+    prs = Presentation()
+    prs.slide_width = Inches(10)
+    prs.slide_height = Inches(5.625)
+    blank = prs.slide_layouts[6]
+    for i, img in enumerate(image_paths):
+        slide = prs.slides.add_slide(blank)
+        slide.shapes.add_picture(img, 0, 0, width=prs.slide_width, height=prs.slide_height)
+        note = notes[i] if i < len(notes) else ""
+        if note:
+            slide.notes_slide.notes_text_frame.text = note
+    prs.save(out_path)
+
+
+def _run_ppt_pipeline(user_id: str, title: str, style: str, slides: list[dict]) -> dict:
+    """阻塞式：逐页出图 + 组装。放在线程里跑，避免阻塞事件循环。"""
+    key = os.environ.get("DASHSCOPE_API_KEY")
+    if not key:
+        return {"error": "未配置 DASHSCOPE_API_KEY，无法生成 PPT。请在 .env 中设置。"}
+    style_desc = _STYLE_PRESETS.get(style, _STYLE_PRESETS[_DEFAULT_STYLE])
+    safe_title = "".join(c for c in title if c not in '\\/:*?"<>|').strip() or "deck"
+    user_dir = UPLOADS_DIR / user_id
+    work_dir = user_dir / "_ppt" / safe_title
+    work_dir.mkdir(parents=True, exist_ok=True)
+
+    image_paths: list[str] = []
+    notes: list[str] = []
+    for idx, s in enumerate(slides, 1):
+        body = (s.get("prompt") or "").strip()
+        if not body:
+            return {"error": f"第 {idx} 页缺少 prompt"}
+        full = f"{_PPT_QUALITY_RULES} Visual style: {style_desc}. {body}"
+        out = work_dir / f"slide_{idx:02d}.png"
+        try:
+            _qwen_gen_image(full, str(out), key)
+        except Exception as e:  # noqa: BLE001 — 出图边界，回报给模型
+            return {"error": f"第 {idx} 页出图失败: {e}"}
+        image_paths.append(str(out))
+        notes.append((s.get("notes") or "").strip())
+
+    pptx_name = f"{safe_title}.pptx"
+    pptx_path = user_dir / pptx_name
+    try:
+        _assemble_pptx(image_paths, notes, str(pptx_path))
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"组装 PPT 失败: {e}"}
+
+    from urllib.parse import quote
+    return {
+        "success": True,
+        "slides": len(image_paths),
+        "file": pptx_name,
+        "download_url": f"/download?user_id={quote(user_id)}&file={quote(pptx_name)}",
+    }
+
+
+async def generate_ppt(
+    title: str,
+    slides: list[dict],
+    tool_context: ToolContext,
+    style: str = _DEFAULT_STYLE,
+    description: str = "",
+) -> dict:
+    """生成图片型 PPT：每页一整张 16:9 生成图，组装为 .pptx 供下载。
+
+    你（模型）负责创意部分——先规划提纲，再为每一页写好出图提示词；本工具负责
+    机械部分——逐页调用图片模型出图并组装。调用前请把每一页的画面/版式想清楚。
+
+    参数：
+    - title: 演示文稿标题（也作为文件名）。
+    - slides: 每页一个 dict：{"prompt": 该页出图提示词, "notes": 可选演讲备注}。
+      prompt 用英文骨架描述版式、用中文写要显示的标题/正文文字，文字务必精简、
+      每个字都要正确；不要写十六进制色号、不要写"Card 1/2"之类脚手架词。
+    - style: 预设风格名，取值之一：科研答辩风、麦肯锡风格、清爽专业风、数据仪表盘风、
+      党政红风格、教学课件风、温暖手工风、手绘白板风、手绘技术解释风、
+      电子墨水杂志风、创意杂志风、复古扁平插画风。默认科研答辩风。
+    - description: 操作目的（展示用）。
+
+    返回 {"success", "slides", "file", "download_url"}；失败返回 {"error"}。
+    生成后请把 download_url 以 markdown 链接形式给用户，让其点击下载。
+    出图较慢（每页约需 30-60 秒），请一次把整套页面传入。
+    """
+    import asyncio
+
+    if not isinstance(slides, list) or not slides:
+        return {"error": "slides 不能为空"}
+    if len(slides) > _PPT_MAX_SLIDES:
+        return {"error": f"页数过多（{len(slides)} > {_PPT_MAX_SLIDES}），请精简"}
+    user_id = str(
+        (tool_context.state.get("_sbkey") if tool_context else None)
+        or (tool_context.user_id if tool_context else None)
+        or "default_user"
+    )
+    return await asyncio.to_thread(_run_ppt_pipeline, user_id, title, style, slides)

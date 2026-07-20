@@ -17,6 +17,7 @@ CONFIG="${HOME}/.sandbox.toml"
 echo "==> 检查 Docker..."
 docker info >/dev/null 2>&1 || { echo "Docker 未运行，请先启动 Docker Desktop。"; exit 1; }
 
+echo "==> 拉取镜像..."
 echo "==> 拉取 execd 镜像（opensandbox 注入每个沙箱的执行守护进程）..."
 docker pull "${MIRROR}/opensandbox/execd:v1.0.20"
 docker tag  "${MIRROR}/opensandbox/execd:v1.0.20" opensandbox/execd:v1.0.20

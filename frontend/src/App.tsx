@@ -97,6 +97,13 @@ function getToolIcon(toolName: string): ReactNode {
   return map[toolName] || <Wrench className="w-4 h-4" />;
 }
 
+// ─── 预设模版风格（与后端 _STYLE_PRESETS 对应）────────────────────────────────
+const PPT_STYLES = [
+  '科研答辩风', '麦肯锡风格', '清爽专业风', '数据仪表盘风',
+  '党政红风格', '教学课件风', '温暖手工风', '手绘白板风',
+  '手绘技术解释风', '电子墨水杂志风', '创意杂志风', '复古扁平插画风',
+] as const;
+
 // ─── 示例问题 ─────────────────────────────────────────────────────────────────
 type ExampleQuestion = {
   question: string;
@@ -104,26 +111,19 @@ type ExampleQuestion = {
 };
 
 const EXAMPLE_QUESTIONS: ExampleQuestion[] = [
-  { question: '对比 RAG 与长上下文窗口在知识密集型任务上的优劣' },
-  { question: '追踪 Mixture-of-Experts 大模型的最新进展' },
-  { question: '联网搜索最近一周关于大模型的重要新闻并总结要点' },
-  // 触发 clarify（人在回路）：未指明对比对象，会先反问澄清
-  { question: '帮我对比一下这两个方向的代表性工作，给出选型建议' },
-  // 触发 todo（任务规划）：复杂多步综述，会先列计划再逐步推进
-  { question: '系统调研 2024-2025 年扩散语言模型(Diffusion LLM)的发展脉络，分阶段梳理并形成综述' },
-  // 触发 code 执行：检索后用代码统计并可视化
-  { question: '检索 Mixture-of-Experts 近三年的代表论文，并用 Python 统计其按年份的数量分布' },
-  // 触发 terminal：在服务器上执行命令
-  { question: '看看服务器运行环境：当前 Python 版本和已安装的主要科学计算库' },
-  // 触发 vision/OCR：自动上传基准结果表图片，提取数据并补充相关论文
+  { question: '把大语言模型的发展脉络做成一套 12 页 PPT' },
+  { question: '生成一份「Mixture-of-Experts 架构」的教学幻灯片' },
+  { question: '为「2024 年 AI 行业趋势」做一套演示，麦肯锡风格' },
+  { question: '帮我做一份公司季度业绩汇报 PPT，数据仪表盘风' },
+  // 上传资料 → 据内容生成 PPT
   {
-    question: '识别这张基准测试结果表中的数据，并补充该评测的代表性论文',
-    demoFile: '/demo/benchmark_results.png',
-  },
-  // 触发文件解析：自动上传讲义 PPT
-  {
-    question: '解读这份讲义的核心内容，并补充该主题的最新 arXiv 论文',
+    question: '根据这份讲义生成一套演示文稿',
     demoFile: '/demo/LongContextLLM.pptx',
+  },
+  // 上传风格参考图 → 模仿风格生成
+  {
+    question: '参照这张图的视觉风格，做一套「RAG 技术」介绍 PPT',
+    demoFile: '/demo/benchmark_results.png',
   },
 ];
 
@@ -147,9 +147,9 @@ function Header({
   return (
     <header className="flex items-center gap-2 px-4 py-3 border-b border-slate-800 text-sm font-medium text-slate-300">
       <Bot className="w-5 h-5 text-blue-400" />
-      <span className="font-semibold text-slate-200">arXiv</span>
+      <span className="font-semibold text-slate-200">PPT</span>
       <ChevronRight className="w-4 h-4 text-slate-500" />
-      <span className="text-slate-400">学术论文研究智能体</span>
+      <span className="text-slate-400">PPT 生成智能体</span>
       <div className="ml-auto flex items-center gap-2">
         {editing ? (
           <input
@@ -687,6 +687,7 @@ export default function App() {
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [userId, setUserId] = useState('default_user');
+  const [style, setStyle] = useState<string>('');  // 选中的预设模版风格，空=不指定
 
   // 流式中间状态
   const [liveSteps, setLiveSteps] = useState<ToolStep[]>([]);
@@ -1028,9 +1029,11 @@ export default function App() {
     if (uploadedFiles.length > 0) {
       fileHint = '\n\n[已上传文件: ' + uploadedFiles.map((f) => f.name).join(', ') + ']';
     }
+    // 模版风格提示：让 agent 用选定的预设风格生成 PPT
+    const styleHint = style ? `\n\n[PPT 模版风格: ${style}]` : '';
     setMessages((prev) => [
       ...prev,
-      { id: `user_${Date.now()}`, role: 'user', text: text + fileHint },
+      { id: `user_${Date.now()}`, role: 'user', text: text + fileHint + styleHint },
     ]);
 
     // 重置流式状态
@@ -1048,7 +1051,7 @@ export default function App() {
     abortRef.current = ac;
 
     try {
-      await processStream(streamChat(text, userId, ac.signal));
+      await processStream(streamChat(text + styleHint, userId, ac.signal));
       // 流结束但未收到 'done' 事件时，手动收尾
       if (!clarifyPendingRef.current) {
         finalizeAssistant();
@@ -1059,7 +1062,7 @@ export default function App() {
       setIsStreaming(false);
       abortRef.current = null;
     }
-  }, [input, isStreaming, uploadedFiles, processStream, handleStreamError, userId]);
+  }, [input, isStreaming, uploadedFiles, processStream, handleStreamError, userId, style]);
 
   // 回答 clarify 澄清提问，续接同一 session
   const submitAnswer = useCallback(
@@ -1118,9 +1121,9 @@ export default function App() {
         {messages.length === 0 && !isStreaming && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <Bot className="w-12 h-12 text-blue-400/50 mb-4" />
-            <h2 className="text-xl font-semibold text-slate-300 mb-2">学术论文研究智能体</h2>
+            <h2 className="text-xl font-semibold text-slate-300 mb-2">PPT 生成智能体</h2>
             <p className="text-slate-500 text-sm max-w-md mb-8">
-              arXiv 论文检索 · 研究综述 · 方向追踪
+              选风格 / 传模版 · 一句话生成整套演示 · 图片型 16:9 幻灯片
             </p>
             <div className="flex flex-wrap justify-center gap-2 max-w-2xl">
               {EXAMPLE_QUESTIONS.map((ex, i) => (
@@ -1242,6 +1245,17 @@ export default function App() {
             onChange={handleFileSelect}
             className="hidden"
           />
+          <select
+            value={style}
+            onChange={(e) => setStyle(e.target.value)}
+            title="PPT 模版风格"
+            className="mb-1 mr-1 shrink-0 bg-[#0b0f19] border border-slate-700/60 rounded-xl text-[13px] text-slate-300 outline-none py-2.5 px-2 max-w-[9rem] focus:border-slate-500/60"
+          >
+            <option value="">模版：不指定</option>
+            {PPT_STYLES.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
           <textarea
             ref={textareaRef}
             rows={1}

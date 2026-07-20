@@ -88,6 +88,17 @@ logs/
 # 用户上传文件（运行时产物）
 uploads/
 **/uploads/
-.codex
-backend/logs/
-backend/uploads/
+docs/migration-plan.md
+
+.env
+outputs/
+node_modules/
+*.bak
+logs/
+cache/
+backend/app/.adk/session.db
+frontend/dist
+backend/uploads
+backend/rag_storage/
+backend/rag_output/
+manage_backend/data/

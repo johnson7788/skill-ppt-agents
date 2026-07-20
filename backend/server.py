@@ -50,7 +50,7 @@ logger = logging.getLogger("yunding")
 
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.artifacts import InMemoryArtifactService
 from google.adk.runners import Runner
@@ -408,6 +408,7 @@ def _friendly_tool_name(raw: str) -> str:
         "run_skill_script": "执行技能脚本",
         "list_skills": "查看可用技能",
         "load_skill_resource": "加载参考资料",
+        "generate_ppt": "生成 PPT",
     }
     return mapping.get(raw, raw)
 
@@ -523,6 +524,16 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Form(default=
 @app.get("/uploads")
 async def list_uploads(user_id: str = "default_user"):
     return JSONResponse({"user_id": user_id, "files": _get_uploaded_files_info(user_id)})
+
+
+@app.get("/download")
+async def download_file(user_id: str = "default_user", file: str = ""):
+    """下载用户目录下的产物文件（如生成的 .pptx）。仅限 uploads/<user_id>/ 内。"""
+    user_dir = (UPLOADS_DIR / user_id).resolve()
+    target = (user_dir / os.path.basename(file)).resolve()
+    if not str(target).startswith(str(user_dir)) or not target.is_file():
+        return JSONResponse({"error": "文件不存在"}, status_code=404)
+    return FileResponse(str(target), filename=target.name)
 
 
 @app.delete("/uploads")

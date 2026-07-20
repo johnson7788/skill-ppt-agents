@@ -46,6 +46,7 @@ from app.narrator import (
 from app.tools import (
     clarify_tool,
     ensure_sandbox_skills,
+    generate_ppt,
     sync_upload_to_sandbox,
     terminal,
     todo,
@@ -80,6 +81,11 @@ bing_search_skill = load_skill_from_dir(
     SKILLS_DIR / "bingsearch"
 )
 
+# Skill 3: 图片型 PPT 生成 — qwen-image 逐页出图 + 组装 .pptx
+ppt_deck_skill = load_skill_from_dir(
+    SKILLS_DIR / "ppt-deck"
+)
+
 # ---------------------------------------------------------------------------
 # SkillToolset — 自动生成 list_skills, load_skill, load_skill_resource, run_skill_script
 # ---------------------------------------------------------------------------
@@ -87,6 +93,7 @@ skill_toolset = SkillToolset(
     skills=[
         arxiv_paper_search_skill,
         bing_search_skill,
+        ppt_deck_skill,
     ]
 )
 
@@ -142,6 +149,7 @@ root_agent = Agent(
         FunctionTool(todo),
         FunctionTool(terminal),
         FunctionTool(vision_analyze),
+        FunctionTool(generate_ppt),
         FunctionTool(upload_to_sandbox),
         FunctionTool(sync_upload_to_sandbox),
         # FunctionTool(ensure_sandbox_skills),
