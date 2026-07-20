@@ -226,10 +226,12 @@ Agent 规划提纲，为每页写英文出图 prompt + 中文演讲备注
 
 ### 启用步骤（自动化脚本）
 
-两个脚本把手动操作收敛为一次性准备 + 每次启动，沙箱由后端连接池按每租户自动创建，无需手动 `osb sandbox create`：
+三个脚本覆盖准备 → 启动沙箱服务端 → 启动应用，沙箱由后端连接池按每租户自动创建，无需手动 `osb sandbox create`：
 
 ```bash
-# 1. 一次性准备：检查 Docker、拉取 execd 镜像、构建 my-sandbox:latest、写入服务端配置
+# 1. 一次性环境准备（幂等，可重复运行）
+#    检查 Docker → 拉取 opensandbox/execd 镜像 → 构建沙箱镜像 my-sandbox:latest
+#    → 写入 ~/.sandbox.toml 服务端配置 → 配置 osb CLI 连接参数
 ./prepare.sh
 
 # 2. 启动 OpenSandbox 服务端（保持运行，幂等——已在 :8080 运行则自动跳过）
@@ -239,12 +241,12 @@ Agent 规划提纲，为每页写英文出图 prompt + 中文演讲备注
 #    SANDBOX_ENABLED=true
 #    SANDBOX_IMAGE=my-sandbox:latest
 
-# 4. 启动应用，后端会自动向服务端创建每租户沙箱
+# 4. 启动应用（后端 :8585 + 前端 :3585），后端会自动向服务端创建每租户沙箱
 ./start.sh
 ```
 
-> `prepare.sh` 可重复运行（幂等）；`start_sandbox.sh` 检测到服务端已在跑会直接跳过。
-> 手动构建镜像：`docker build -t my-sandbox:latest ./sandbox-image`。
+> `prepare.sh` 只需在首次部署或更新沙箱镜像时运行；`start_sandbox.sh` 检测到服务端已在跑会直接跳过。
+> 手动构建沙箱镜像：`docker build -t my-sandbox:latest ./sandbox-image`。
 
 ---
 
@@ -256,10 +258,10 @@ skill-ppt-agents/
 ├── Dockerfile                    # 生产镜像（Python 3.12 + Node 20 + Gunicorn）
 ├── docker-compose.yml            # 容器编排（2 CPU、2G RAM）
 ├── sandbox-image/                # 沙箱镜像（python:3.12 + pandoc + 技能脚本预装）
-├── prepare.sh                    # 沙箱一次性准备（拉 execd、构建 my-sandbox、写服务端配置）
-├── start_sandbox.sh              # 启动 OpenSandbox 服务端（幂等）
-├── start.sh                      # 本地开发一键启动（后端 + 前端）
-├── deploy.sh                     # 生产部署（git pull → docker build → 健康检查）
+├── prepare.sh                    # 一次性环境准备：检查 Docker、拉取 execd 镜像、构建沙箱镜像、写入 OpenSandbox 服务端配置与 CLI 配置
+├── start_sandbox.sh              # 启动 OpenSandbox 服务端（:8080，幂等——已在运行则自动跳过）；沙箱由后端连接池按租户自动创建
+├── start.sh                      # 本地开发启动：后端（:8585，uv run）+ 前端（:3585，npm run dev），Ctrl+C 统一关闭
+├── deploy.sh                     # 生产部署（git pull → docker compose up → 健康检查）；基础版本，尚未详细优化
 │
 ├── backend/
 │   ├── pyproject.toml            # Python 依赖（hatchling 构建）
