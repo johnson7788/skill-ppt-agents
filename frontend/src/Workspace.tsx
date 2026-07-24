@@ -213,7 +213,7 @@ export default function Workspace({
           isWhiteboard(selected.name) ? (
             <WhiteboardEditor key={`${selected.path}:${reloadNonce}`} path={selected.path} userId={userId} />
           ) : isOffice(selected.name) ? (
-            <OfficeEditor key={selected.path} path={selected.path} userId={userId} name={selected.name} />
+            <OfficeEditor key={`${selected.path}:${reloadNonce}`} path={selected.path} userId={userId} name={selected.name} />
           ) : (
             <div className="h-full overflow-auto">
               <Preview node={selected} userId={userId} />

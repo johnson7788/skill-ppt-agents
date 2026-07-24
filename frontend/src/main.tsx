@@ -48,7 +48,7 @@ function Shell() {
       {/* 统一顶栏：logo + 产品名 · 用户（开关移到两侧悬浮把手） */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-200 bg-white flex-shrink-0">
         <Sparkles size={18} className="text-blue-600" />
-        <span className="text-[15px] font-semibold text-slate-800">文档生成智能体</span>
+        <span className="text-[15px] font-semibold text-slate-800">Online AI Office</span>
         <div className="ml-auto flex items-center gap-1.5 text-[12px] text-slate-400">
           <User size={14} />
           <input

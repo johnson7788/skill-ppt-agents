@@ -148,9 +148,7 @@ function Header({
   return (
     <header className="flex items-center gap-2 px-4 py-3 border-b border-slate-200 text-sm font-medium text-slate-700">
       <Bot className="w-5 h-5 text-blue-600" />
-      <span className="font-semibold text-slate-800">PPT</span>
-      <ChevronRight className="w-4 h-4 text-slate-500" />
-      <span className="text-slate-400">文档生成智能体</span>
+      <span className="font-semibold text-slate-800">Online AI Office</span>
       <div className="ml-auto flex items-center gap-2">
         {editing ? (
           <input
@@ -1138,7 +1136,7 @@ export default function App({
         {messages.length === 0 && !isStreaming && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <Bot className="w-12 h-12 text-blue-600/50 mb-4" />
-            <h2 className="text-xl font-semibold text-slate-700 mb-2">文档生成智能体</h2>
+            <h2 className="text-xl font-semibold text-slate-700 mb-2">Online AI Office</h2>
             <p className="text-slate-500 text-sm max-w-md mb-8">
               一句话生成 PPT / PDF / Word / Excel / 思维导图 · 可在工作台在线编辑
             </p>

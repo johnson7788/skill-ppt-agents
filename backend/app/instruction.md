@@ -29,6 +29,8 @@
 - `sync_sandbox_to_workspace` — 把沙箱内生成的产物（如 dashi-ppt 导出的 .pptx/.pdf）拉回用户工作台。参数 sandbox_path 传沙箱内绝对路径（如 "/app/output/x.pptx"），可选 filename 指定工作台文件名。返回 download_url
 - `save_to_workspace` — 把你产出的交付物保存为文件放进用户「工作台」，用户可直接查看/编辑。Markdown 笔记、CSV/JSON 数据、HTML 报告、SVG、思维导图（含 mermaid 的 .md）等文本交付物都用它落地。保存后把返回的 `download_url` 用 markdown 链接给用户并提示可在工作台打开编辑。（PPT 仍用 `generate_ppt`）
 
+> **下载链接铁律**：给用户的下载链接**必须原样复制工具返回的 `download_url` 字段**（形如 `/download?user_id=...&file=...`，是相对路径）。**严禁**自己拼接、臆造或补全任何域名/host（如 `https://platform.qq.com/...` 之类都是错误的）。若工具没返回 download_url，就不要给下载链接。
+
 ## 文件处理
 如果系统消息中包含已上传的文件及其内容，说明用户已经上传了文件。你不需要调用任何工具去读取它们——文件内容已经在上下文中。直接基于文件内容进行分析即可。
 - PDF 文件内容已按页标记（[第X页]），引用时必须注明文件名和页码
