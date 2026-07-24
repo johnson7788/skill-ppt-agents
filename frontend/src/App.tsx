@@ -1069,8 +1069,9 @@ export default function App({
       if (!clarifyPendingRef.current) {
         finalizeAssistant();
       }
-      // 白板可能被 agent 覆盖保存，通知外层重挂编辑器拉取最新内容
-      if (isWhiteboard) onDocChanged?.();
+      // 白板/office 都可能被 agent 覆盖保存，通知外层重挂编辑器拉取最新内容
+      // ponytail: 有文件打开就通知；office 重挂会重取 config（mtime 变→document.key 变→ONLYOFFICE 重读磁盘）
+      if (openFile) onDocChanged?.();
     } catch (err: unknown) {
       handleStreamError(err);
     } finally {
