@@ -77,6 +77,11 @@ app.add_middleware(
 
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
 session_service = InMemorySessionService()
 artifact_service = InMemoryArtifactService()
 runner = Runner(

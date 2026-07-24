@@ -21,21 +21,17 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && npm config set registry https://registry.npmmirror.com \
     && npm install -g pptxgenjs
 
-# ---- Python dependencies ----
-COPY requirements.txt .
-RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
-
-# ---- Application code ----
-COPY server.py .
-COPY agent.md .
-COPY skills/ ./skills/
+# ---- Application code + Python dependencies ----
+# 项目已重构到 backend/：pyproject.toml 声明依赖，app/ 是包，server.py 是入口。
+COPY backend/ /app/
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple . gunicorn
 
 EXPOSE 8046
 
 # ---- Runtime settings (overridable via env) ----
 ENV HOST="0.0.0.0"
 ENV PORT="8046"
-ENV WORKERS=${WORKERS:-0}
+ENV WORKERS="4"
 ENV TIMEOUT="600"
 ENV GRACEFUL_TIMEOUT="30"
 ENV KEEP_ALIVE="75"
