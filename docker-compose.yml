@@ -32,3 +32,6 @@ services:
     environment:
       - JWT_ENABLED=true
       - JWT_SECRET=${OFFICE_JWT_SECRET:?err}
+    volumes:
+      # 挂进免费插件「AI 改写」（选区→LLM→写回）。社区版自动发现该目录，改后重启容器生效。
+      - ./backend/office_plugin/ai-rewrite:/var/www/onlyoffice/documentserver/sdkjs-plugins/ai-rewrite

@@ -771,6 +771,41 @@ async def office_callback(request: Request, token: str = ""):
     return JSONResponse({"error": 0})
 
 
+class OfficeEditIn(BaseModel):
+    text: str
+    instruction: str
+
+
+@app.post("/office/edit")
+async def office_edit(body: OfficeEditIn):
+    """ONLYOFFICE 插件的选区改写：收选区文本+指令 → LLM 改写 → 只回改写后文本（插件负责写回选区）。"""
+    text = (body.text or "").strip()
+    instruction = (body.instruction or "").strip()
+    if not text or not instruction:
+        return JSONResponse({"error": "缺少 text 或 instruction"}, status_code=400)
+
+    import litellm
+    from app.agent import MODEL_PROVIDER, MODEL_NAME
+    model = MODEL_NAME if "/" in MODEL_NAME else f"{MODEL_PROVIDER}/{MODEL_NAME}"
+    try:
+        resp = await litellm.acompletion(
+            model=model,
+            api_key=os.environ.get("DEEPSEEK_API_KEY"),
+            messages=[
+                {"role": "system", "content":
+                    "你是文档改写助手。根据用户指令改写给定文本，只输出改写后的正文，"
+                    "不要加解释、不要加引号、不要加markdown标记。"},
+                {"role": "user", "content": f"指令：{instruction}\n\n原文：\n{text}"},
+            ],
+            temperature=0.3,
+        )
+        out = resp["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        logger.error("office_edit 改写失败: %s", e)
+        return JSONResponse({"error": str(e)}, status_code=500)
+    return JSONResponse({"text": out})
+
+
 # ---------------------------------------------------------------------------
 # SSE 缓存管理接口
 # ---------------------------------------------------------------------------

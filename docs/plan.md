@@ -169,7 +169,7 @@ DocServer 与后端要能互相通过内网 URL 访问（compose 同网络即可
 ## 10. P5 —— 对话即编辑：合并「对话」与「工作台」（进行中）
 
 > **进度**：10.3 的 1（布局合并+顶栏）✅、2（文档感知）✅、3（白板对话式编辑）✅ 已落地。
-> 4（ONLYOFFICE connector 选区编辑）需先起真实 DocServer 做 POC，未做；5（图片重绘）依赖尚不存在的 image skill，未做。
+> 4（ONLYOFFICE 选区编辑）**方案已改**：Connector API 是付费 Developer Edition 独有，免费社区版拿不到 → 改走**免费的 ONLYOFFICE 插件（Plugin）**路径（详见 §10.4），待 POC；5（图片重绘）依赖尚不存在的 image skill，未做。
 > **白板方案实际落地与 10.2 原设计不同**：不做"选区→LLM 返回局部 elements"（DeepSeek 手写合法 excalidraw 元素 JSON 不稳，且 agent 无读回白板的工具）。改为**整图重画+自动重载**：前端 sendMessage 把当前 `.excalidraw` 完整 JSON 注入消息 → agent 用 excalidraw-diagram 技能产出整份新场景 → `save_to_workspace(同名路径, 新JSON)` 覆盖 → 前端回合结束触发 `onDocChanged` → Shell `reloadNonce+1` → Workspace 用 `key=path:nonce` 重挂 WhiteboardEditor 重新 readFileText。零后端改动，复用现有 skill+save_to_workspace。代价：丢用户手动布局、非选区级、每次整图。
 
 
@@ -197,7 +197,7 @@ DocServer 与后端要能互相通过内网 URL 访问（compose 同网络即可
 | 编辑器 | 读选区 | 回写 |
 |--------|--------|------|
 | **Excalidraw**（白板/思维导图） | `excalidrawAPI.getSceneElements()` + `appState.selectedElementIds` | LLM 返回新 elements → `updateScene({elements})` 局部替换 → 现有防抖 PUT 保存 |
-| **ONLYOFFICE**（docx/xlsx/pptx） | `docEditor.createConnector()` → `executeMethod("GetSelectedText")` / `callCommand` 跑 Document Builder 读选区 | connector `PasteText` / `callCommand` 替换选区 → ONLYOFFICE 自身 callback 落盘（沿用 P2）。**仅可编辑文档，pdf 只读** |
+| **ONLYOFFICE**（docx/xlsx/pptx） | **免费 Plugin** 内 `window.Asc.plugin.executeMethod("GetSelectedText")` 读选区（**非**付费 Connector） | 同一插件 `executeMethod("PasteText", [新文本])` / `callCommand` 替换选区 → ONLYOFFICE 自身 callback 落盘（沿用 P2）。**仅可编辑文档，pdf 只读** |
 | **图片文件**（png/jpg 预览） | 整图或框选区域 | vision 理解 + image 模型重绘 → 替换文件 |
 
 **后端**：新增"选区改写"入口（复用 `/chat/stream` 带 `context`，或新 `/chat/edit`）：
@@ -208,10 +208,46 @@ DocServer 与后端要能互相通过内网 URL 访问（compose 同网络即可
 1. **布局合并**：Shell 从 tab 切换 → 三栏常驻；把 App.tsx 的对话逻辑抽成 `AssistantPanel`，主区抽成 `EditorPane`（按后缀路由）。**与 P4 顶栏合并同批做。**
 2. **文档感知**：主区打开文件时，把 `{当前文件, 编辑器类型}` 注入助手上下文，首屏提示"可以让我改这份文档的某段/某图"。
 3. **白板选区编辑先行**（最简单，excalidrawAPI 现成）：选中节点 → 指令 → `updateScene`，跑通"选区→对话→回写"闭环。
-4. **ONLYOFFICE connector 选区编辑**（较重）：先验证社区版 connector 是否支持 `GetSelectedText`/`callCommand`，再接。
+4. **ONLYOFFICE 选区编辑（走免费 Plugin，详见 §10.4）**：Connector 付费拿不到 → 写社区版免费插件读/写选区。分 POC→接 LLM 两步。
 5. **图片重绘**（依赖 image skill）。
 
 **风险/备注**：
-- ONLYOFFICE 社区版 connector 能力边界要先 POC 验证，别假设全支持。
+- ONLYOFFICE 社区版 **Connector**（宿主页遥控）付费独有，改用免费 **Plugin**（编辑器内）；Plugin 的 `callCommand`/`PasteText` 写回需在我们这个 community docker 构建上先 POC 实测生效。
 - 三栏窄屏拥挤 → 助手侧栏与文件树都做成可折叠。
 - P4 与 P5 的顶栏是同一块，务必一起改，避免返工。
+
+### 10.4 ONLYOFFICE 免费插件方案（替代付费 Connector）——实施计划
+
+**为什么走插件**：宿主页 Connector API（`docEditor.createConnector`/`executeMethod`/`callCommand`）是付费
+Developer Edition 独有；但 **ONLYOFFICE 插件（Plugin）系统在社区版完全开放免费**，插件跑在编辑器
+iframe 内，`window.Asc.plugin.executeMethod("GetSelectedText")` 读选区 + `executeMethod("PasteText",[…])`/
+`callCommand` 写回选区，能力等同 Connector（Connector 本质=把同一套 Plugin API 暴露给宿主页的付费封装）。
+官方自带 Translator 插件即「读选区→翻译→写回」范例，证明社区版可行。
+
+**插件形态**（一个静态目录，挂进 DocServer 容器）：
+```
+backend/office_plugin/ai-rewrite/
+  config.json     # guid/name/按钮/variations；声明 isViewer:false、editorsSupport
+  index.html      # 插件面板 UI：一个指令输入框 + 「改写」按钮
+  code.js         # window.Asc.plugin.init / button 事件；读选区→fetch 后端→PasteText 写回
+  icons/*         # 工具栏图标
+```
+容器挂载：compose 给 documentserver 加
+`volumes: ["./backend/office_plugin/ai-rewrite:/var/www/onlyoffice/documentserver/sdkjs-plugins/ai-rewrite"]`
+（社区版插件自动发现该目录；改 config 后可能要重启容器）。
+
+**后端新增一个无状态端点**（复用现有 DeepSeek 客户端）：
+`POST /office/edit  {text, instruction} -> {text: 改写后}`。纯文本进出、不碰文件二进制、不需 user_id/path
+（回写由插件在编辑器内做，落盘沿用 P2 的 office callback）。注意 CORS：插件 iframe 来自 DocServer 源，
+fetch 到 8585 要允许跨域（给该端点加 CORS，或走 `OFFICE_BACKEND_URL`）。
+
+**分步 POC（先证链路，再接智能）**：
+1. **P-a 写回验证（零 LLM）**：插件读选区 → 直接 `PasteText("【已改写】"+原文)` 写回。
+   目的：**在我们这个 community docker 构建上实测 `executeMethod`/`callCommand` 写回真的生效**（这是唯一没把握的点）。
+2. **P-b 接 LLM**：插件面板输入指令 → `POST /office/edit{选区文本, 指令}` → DeepSeek 改写 → `PasteText` 写回 → 用户 Ctrl+S/自动 forcesave 触发 P2 callback 落盘。
+3. **P-c（可选，锦上添花）**：把「指令输入」从插件自带面板桥接到右侧助手侧栏（跨 iframe `postMessage`），
+   让 office 编辑和白板编辑共用同一个助手对话框，体验统一。POC 阶段先用插件自带面板，不做 postMessage。
+
+**边界**：仅 docx/xlsx/pptx 可写，pdf 只读；选区改写是「替换选中文本」粒度，复杂格式（表格结构、图片）不在 POC 范围。
+**待确认（POC 要打勾的）**：① 插件目录挂载后编辑器工具栏能出现按钮；② `GetSelectedText` 拿到选区；
+③ `PasteText`/`callCommand` 写回生效且 P2 callback 正常落盘；④ 插件 iframe fetch 后端的跨域放行。
