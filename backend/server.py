@@ -48,7 +48,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("skill_ppt_agent")
 
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from google.adk.agents.run_config import RunConfig, StreamingMode
@@ -639,6 +639,129 @@ async def files_delete(user_id: str = "default_user", path: str = ""):
     else:
         return JSONResponse({"error": "不存在"}, status_code=404)
     return JSONResponse({"success": True})
+
+
+# ---------------------------------------------------------------------------
+# ONLYOFFICE 网关 — DocumentServer 通过 URL 拉取/回写文件，后端当文件网关。
+# JWT 是安全边界：config 后端签发，callback 后端验签。密钥只在后端。
+# ---------------------------------------------------------------------------
+import jwt as _pyjwt
+
+OFFICE_SECRET = os.environ.get("OFFICE_JWT_SECRET", "")
+# 浏览器访问 DocumentServer 的地址（加载 api.js）；OpenSandbox 占用 8080，故默认 8081
+OFFICE_DOCSERVER_URL = os.environ.get("OFFICE_DOCSERVER_URL", "http://localhost:8081")
+# DocumentServer 容器回访本后端的地址（download/callback）——不能用 localhost（那是容器自己）
+OFFICE_BACKEND_URL = os.environ.get("OFFICE_BACKEND_URL", "http://host.docker.internal:8585")
+
+# 文件后缀 → ONLYOFFICE documentType
+_OFFICE_TYPES = {
+    "docx": "word", "doc": "word", "odt": "word", "rtf": "word", "txt": "word",
+    "xlsx": "cell", "xls": "cell", "ods": "cell", "csv": "cell",
+    "pptx": "slide", "ppt": "slide", "odp": "slide",
+    "pdf": "pdf",
+}
+
+
+def _office_sign(payload: dict) -> str:
+    return _pyjwt.encode(payload, OFFICE_SECRET, algorithm="HS256")
+
+
+def _office_verify(token: str) -> dict:
+    return _pyjwt.decode(token, OFFICE_SECRET, algorithms=["HS256"])
+
+
+@app.get("/office/config")
+async def office_config(path: str = "", user_id: str = "default_user"):
+    """签发 DocEditor 配置（含签名 token + 供浏览器加载 api.js 的 docserver 地址）。"""
+    if not OFFICE_SECRET:
+        return JSONResponse({"error": "未配置 OFFICE_JWT_SECRET，无法在线编辑"}, status_code=503)
+    if not path:
+        return JSONResponse({"error": "缺少 path"}, status_code=400)
+    try:
+        target = _safe_user_path(user_id, path)
+    except ValueError:
+        return JSONResponse({"error": "非法路径"}, status_code=400)
+    if not target.is_file():
+        return JSONResponse({"error": "文件不存在"}, status_code=404)
+    ext = target.suffix.lower().lstrip(".")
+    doc_type = _OFFICE_TYPES.get(ext)
+    if not doc_type:
+        return JSONResponse({"error": f"不支持在线编辑的类型: .{ext}"}, status_code=400)
+
+    # key 绑定内容版本：mtime 变则 key 变，避免编辑器显示缓存旧内容
+    key = hashlib.md5(f"{user_id}:{path}:{target.stat().st_mtime}".encode()).hexdigest()
+    # download/callback 用短期 JWT 绑定 path+user，DocServer 凭此回访
+    file_token = _office_sign({
+        "path": path, "user_id": user_id, "exp": int(time.time()) + 24 * 3600,
+    })
+    config = {
+        "document": {
+            "fileType": ext,
+            "key": key,
+            "title": target.name,
+            "url": f"{OFFICE_BACKEND_URL}/office/download?token={file_token}",
+        },
+        "documentType": doc_type,
+        "editorConfig": {
+            "mode": "edit",
+            "lang": "zh-CN",
+            "callbackUrl": f"{OFFICE_BACKEND_URL}/office/callback?token={file_token}",
+        },
+    }
+    config["token"] = _office_sign(config)  # 整个 config 签名，DocServer 校验
+    return JSONResponse({"config": config, "docserverUrl": OFFICE_DOCSERVER_URL})
+
+
+@app.get("/office/download")
+async def office_download(token: str = ""):
+    """DocumentServer 拉取原始文件：验签 token → 返回文件字节流。"""
+    try:
+        claims = _office_verify(token)
+    except Exception:
+        return JSONResponse({"error": "invalid token"}, status_code=403)
+    try:
+        target = _safe_user_path(claims["user_id"], claims["path"])
+    except (ValueError, KeyError):
+        return JSONResponse({"error": "非法路径"}, status_code=400)
+    if not target.is_file():
+        return JSONResponse({"error": "文件不存在"}, status_code=404)
+    return FileResponse(str(target), filename=target.name)
+
+
+@app.post("/office/callback")
+async def office_callback(request: Request, token: str = ""):
+    """DocumentServer 保存回调：验签 → status 2/6 时下载编辑后文件写回。"""
+    try:
+        claims = _office_verify(token)
+    except Exception:
+        return JSONResponse({"error": 1}, status_code=403)
+    body = await request.json()
+    # JWT_ENABLED 时回调体带 token（DocServer 对 body 的签名），验证来源真实性
+    inner = body.get("token")
+    if inner:
+        try:
+            _office_verify(inner)
+        except Exception:
+            return JSONResponse({"error": 1}, status_code=403)
+
+    status = body.get("status")
+    # 2=MustSave（编辑结束需保存）, 6=ForceSave（强制保存）
+    if status in (2, 6):
+        edited_url = body.get("url")
+        if edited_url:
+            import httpx
+            try:
+                async with httpx.AsyncClient() as client:
+                    r = await client.get(edited_url, timeout=60)
+                    r.raise_for_status()
+                target = _safe_user_path(claims["user_id"], claims["path"])
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(r.content)
+                logger.info("ONLYOFFICE 保存回写: %s (%d bytes)", claims["path"], len(r.content))
+            except Exception as e:
+                logger.error("ONLYOFFICE 回写失败: %s", e)
+                return JSONResponse({"error": 1})
+    return JSONResponse({"error": 0})
 
 
 # ---------------------------------------------------------------------------

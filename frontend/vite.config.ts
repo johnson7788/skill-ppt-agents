@@ -22,6 +22,7 @@ export default defineConfig({
       '/uploads': 'http://localhost:8585',
       '/download': 'http://localhost:8585',
       '/files': 'http://localhost:8585',
+      '/office': 'http://localhost:8585',
     },
   },
 });

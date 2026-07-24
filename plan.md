@@ -129,5 +129,10 @@ DocServer 与后端要能互相通过内网 URL 访问（compose 同网络即可
    —— 决策修正：文档空间用**本地 uploads/<user_id>/**（产物/下载已在这），沙箱仍是代码执行环境，没接 `sandbox.read_file`。
 2. **P1 Excalidraw** ✅：装 `@excalidraw/excalidraw@0.18`，`WhiteboardEditor.tsx` 读写 `.excalidraw`（走 /files/raw，防抖保存）。
    思维导图/流程图用 Excalidraw 自带的 mermaid→excalidraw，无需额外依赖。
-3. **P2 ONLYOFFICE**（下一步）：起 DocumentServer 容器 + 三个网关端点 + JWT + 前端 iframe。
+3. **P2 ONLYOFFICE** ✅（代码就绪，待起容器端到端验证）：
+   - docker-compose 加 `documentserver`（端口 8081，8080 被 OpenSandbox 占）+ JWT。
+   - 后端网关 `/office/config`(签发)、`/office/download`(DocServer 拉)、`/office/callback`(写回)，PyJWT 签验。
+   - 前端 `OfficeEditor.tsx` 加载 api.js 嵌 DocEditor；未配置时回退下载。pdf 也走 ONLYOFFICE。
+   - env：`OFFICE_JWT_SECRET/OFFICE_PORT/OFFICE_DOCSERVER_URL/OFFICE_BACKEND_URL`。
+   - 端到端验证：`docker compose up -d documentserver` 后，工作台打开 .docx/.pptx 编辑保存回写。
 4. **P3 Skills 联动**：验证 Agent 产物在编辑器里可编辑、可回喂；按需加 docx/xlsx/mindmap skill。

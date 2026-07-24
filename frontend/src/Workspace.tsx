@@ -19,6 +19,7 @@ import {
   type FileNode,
 } from './api';
 import WhiteboardEditor from './WhiteboardEditor';
+import OfficeEditor, { isOffice } from './OfficeEditor';
 
 const isWhiteboard = (name: string) => name.toLowerCase().endsWith('.excalidraw');
 
@@ -93,9 +94,6 @@ function Preview({ node, userId }: { node: FileNode; userId: string }) {
   if (IMAGE_EXT.includes(ext)) {
     return <img src={url} alt={node.name} className="max-w-full max-h-full object-contain mx-auto" />;
   }
-  if (ext === 'pdf') {
-    return <iframe src={url} title={node.name} className="w-full h-full border-0" />;
-  }
   if (TEXT_EXT.includes(ext)) {
     return (
       <pre className="text-[13px] text-slate-300 whitespace-pre-wrap leading-relaxed p-4 font-mono">
@@ -103,7 +101,7 @@ function Preview({ node, userId }: { node: FileNode; userId: string }) {
       </pre>
     );
   }
-  // 未支持在线预览的类型（doc/ppt/xls 等，P2 接 ONLYOFFICE 后可编辑）
+  // 无法在线预览的类型（压缩包等）→ 下载
   return (
     <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400">
       <FileIcon size={40} className="text-slate-600" />
@@ -115,7 +113,6 @@ function Preview({ node, userId }: { node: FileNode; userId: string }) {
       >
         <Download size={15} /> 下载
       </a>
-      <div className="text-xs text-slate-600">（doc/ppt/xls 在线编辑将由 ONLYOFFICE 提供）</div>
     </div>
   );
 }
@@ -198,6 +195,8 @@ export default function Workspace({ userId }: { userId: string }) {
         {selected ? (
           isWhiteboard(selected.name) ? (
             <WhiteboardEditor key={selected.path} path={selected.path} userId={userId} />
+          ) : isOffice(selected.name) ? (
+            <OfficeEditor key={selected.path} path={selected.path} userId={userId} name={selected.name} />
           ) : (
             <div className="h-full overflow-auto">
               <Preview node={selected} userId={userId} />

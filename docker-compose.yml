@@ -22,3 +22,15 @@ services:
         reservations:
           cpus: "0.5"
           memory: "512M"
+
+  # ONLYOFFICE 文档服务器 —— 在线编辑 doc/xls/ppt/pdf。
+  # 8080 被 OpenSandbox 占用，故对外映射 8081。JWT 密钥与后端共享。
+  documentserver:
+    image: onlyoffice/documentserver
+    container_name: onlyoffice-documentserver
+    restart: unless-stopped
+    ports:
+      - "${OFFICE_PORT:-8081}:80"
+    environment:
+      - JWT_ENABLED=true
+      - JWT_SECRET=${OFFICE_JWT_SECRET:?err}

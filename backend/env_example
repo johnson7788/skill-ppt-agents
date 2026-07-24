@@ -96,3 +96,18 @@ SANDBOX_API_KEY=123456
 SANDBOX_TIMEOUT_MINUTES=30
 # 租户闲置多久后回收其沙箱（分钟）
 SANDBOX_IDLE_MINUTES=15
+
+# ---------------------------------------------------------------------------
+# ONLYOFFICE 在线编辑（doc/xls/ppt/pdf）
+# ---------------------------------------------------------------------------
+# 启动 DocumentServer：docker compose up -d documentserver
+# JWT 密钥必须与 DocumentServer 一致（安全边界），务必改成随机长字符串
+OFFICE_JWT_SECRET=change-me-to-a-long-random-secret
+# DocumentServer 对外端口（8080 被 OpenSandbox 占用，用 8081）
+OFFICE_PORT=8081
+# 浏览器访问 DocumentServer 的地址（加载 api.js）
+OFFICE_DOCSERVER_URL=http://localhost:8081
+# DocumentServer 容器回访本后端的地址（download/callback）。
+# 不能填 localhost（那是容器自己）。macOS/Windows 用 host.docker.internal；
+# Linux 用宿主机 IP 或给 documentserver 加 extra_hosts。
+OFFICE_BACKEND_URL=http://host.docker.internal:8585
