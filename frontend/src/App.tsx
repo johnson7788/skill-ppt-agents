@@ -22,7 +22,7 @@ import {
   Wrench,
   XCircle,
 } from 'lucide-react';
-import { streamChat, answerChat, uploadFile, listUploads, type SSEEvent } from './api';
+import { streamChat, answerChat, uploadFile, type SSEEvent } from './api';
 
 // ─── 类型定义 ────────────────────────────────────────────────────────────────
 
@@ -730,14 +730,8 @@ export default function App({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 加载已有文件
-  useEffect(() => {
-    listUploads(userId)
-      .then((data) => {
-        if (data.files) setUploadedFiles(data.files);
-      })
-      .catch(() => {});
-  }, [userId]);
+  // 默认不附带任何文件：只有本会话主动上传的文件才进提示词上下文
+  // （不再 mount 时预加载 listUploads，避免新对话自动带上所有已有文件）
 
   // 自动滚底
   useEffect(() => {
