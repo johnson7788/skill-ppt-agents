@@ -22,7 +22,7 @@ import {
   Wrench,
   XCircle,
 } from 'lucide-react';
-import { streamChat, answerChat, uploadFile, listUploads, clearUploads, readFileText, type SSEEvent } from './api';
+import { streamChat, answerChat, uploadFile, listUploads, clearUploads, type SSEEvent } from './api';
 
 // ─── 类型定义 ────────────────────────────────────────────────────────────────
 
@@ -1051,17 +1051,11 @@ export default function App({
     const isWhiteboard = !!openFile && openFile.name.toLowerCase().endsWith('.excalidraw');
     let docHint = '';
     if (openFile && isWhiteboard) {
-      // 白板：把当前完整 JSON 注入，让 agent 用 excalidraw-diagram 产出整份新场景覆盖同名文件
-      let cur = '';
-      try {
-        cur = await readFileText(openFile.path, userId);
-      } catch {
-        /* 读不到就当空白板 */
-      }
+      // 白板：只给文件名/路径，让 agent 围绕主题产出整份新场景覆盖同名文件。
+      // 不注入完整 JSON —— 会撑大消息体、每轮吃掉大量 token（内容本就由主题可推导）。
       docHint =
-        `\n\n[当前工作台打开的是白板「${openFile.name}」(路径 ${openFile.path})，它的完整 .excalidraw JSON 如下：\n` +
-        `${cur.trim() || '(空白板)'}\n` +
-        `若用户要新增/修改/删除图中的节点或连线，请用 excalidraw-diagram 技能产出【修改后的完整 .excalidraw JSON】，` +
+        `\n\n[当前工作台打开的是白板「${openFile.name}」(路径 ${openFile.path})。` +
+        `若用户要新增/修改/删除图中的节点或连线，请用 excalidraw-diagram 技能围绕该主题产出【完整的新 .excalidraw JSON】，` +
         `再调用 save_to_workspace("${openFile.path}", 新JSON) 覆盖保存这个同名文件，不要另存别的文件名；跳过 SKILL 里的渲染校验步骤。]`;
     } else if (openFile) {
       docHint = `\n\n[当前正在工作台编辑文件: ${openFile.name}（路径 ${openFile.path}），若用户的修改请求针对该文件，请对其内容操作]`;
