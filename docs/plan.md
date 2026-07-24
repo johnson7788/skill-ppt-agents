@@ -138,3 +138,75 @@ DocServer 与后端要能互相通过内网 URL 访问（compose 同网络即可
 4. **P3 Skills 联动** ✅：加 `save_to_workspace` 工具（app/tools.py），Agent 把 Markdown/CSV/JSON/HTML/SVG/mindmap(.md) 等文本产物写进本地 `uploads/<user_id>/`，
    自动出现在工作台文件树，点开即用 ONLYOFFICE/Excalidraw 编辑。已注册进 agent.py，instruction.md 加说明，server.py 加友好名。
    PPT 仍走 `generate_ppt`。docx/xlsx（需 python-docx/openpyxl）、mermaid→excalidraw 思维导图 skill 按需再加。
+   —— 补充：思维导图/架构图已接 `excalidraw-diagram` skill（Agent 手写 `.excalidraw` JSON，复用 WhiteboardEditor 可编辑，跳过 chromium 渲染校验）。
+
+---
+
+## 9. P4 —— 界面商务化改版（TODO）
+
+**问题**：当前是"开发者工具风"，不够正式/友好。具体病灶（对照代码）：
+
+| # | 病灶 | 位置 |
+|---|------|------|
+| 1 | 两条顶栏 + 两个 userId 入口冗余 | Shell tab 栏 `main.tsx:14` + Header 面包屑 `App.tsx:148`，各带一个 userId 编辑框（`main.tsx:33`/`App.tsx:155`） |
+| 2 | userId 是裸输入框，很"demo" | `main.tsx:33` |
+| 3 | 文案没跟上改名：输入框 placeholder 仍是「输入你的研究问题…」（arxiv 遗留） | `App.tsx:1277` |
+| 4 | PPT 模版下拉常驻输入行，Word/Excel/思维导图时是噪音 | `App.tsx:1254` |
+| 5 | 深黑霓虹蓝配色（`#0a0e1a`/`bg-blue-600`）= AI dev tool 味 | 全局 |
+| 6 | 空状态单薄 + 彩色药丸 chips，缺分组与层次 | `App.tsx:1126`/`1133` |
+
+**方向**：选 **A 浅色企业级 SaaS 风**（白/浅灰底、中性灰正文、单一品牌蓝点缀、卡片化引导、系统中文字体栈）；备选 B 精致深色（改动小、天花板低）。
+
+**落地优先级**（高杠杆→锦上添花）：
+1. 合并两条顶栏为一条（logo+产品名 · tab · 用户菜单），userId 收进用户菜单。
+2. 统一文案：placeholder → 「描述你想生成的内容，如：把季度业绩做成 Excel 表格」。
+3. 模版下拉移出输入行（放"高级选项"或按意图动态显示）。
+4. 空状态改分组能力卡（PPT / 文档 / 表格 / 图，各带图标+一句说明）。
+5. 整体换色（选 A 则系统性替换配色）。
+
+> 先做 1/2/3（不动配色、见效快），验收后再决定 4/5。**注意 P4 的顶栏合并要和 P5 的三栏布局一起规划，别改两遍。**
+
+## 10. P5 —— 对话即编辑：合并「对话」与「工作台」（TODO，核心改版）
+
+**动机**：希望用户打开文件后，能用对话对**某个段落/某张图**做编辑。一旦助手"文档感知"，独立对话页就与工作台重复——**合并成单页**。
+
+### 10.1 目标布局（替换现在的两个顶层 tab）
+
+```
+┌ 顶栏: logo · 产品名 · 用户菜单 ───────────────────────────┐
+├───────────┬─────────────────────────────┬───────────────┤
+│ 文件树 /  │   主区 = 编辑器              │  助手侧栏     │
+│ 会话      │   (ONLYOFFICE / 白板 / 预览  │  (对话，可折叠)│
+│           │    或 无文件时 = 生成首页)   │               │
+└───────────┴─────────────────────────────┴───────────────┘
+```
+
+- **无打开文件** → 主区 = 生成首页（现欢迎页能力卡）；助手 = 通用生成对话（现有 `/chat/stream`）。产物生成后进文件树并在主区自动打开。
+- **打开文件** → 主区 = 对应编辑器；助手切成"文档助手"，作用域绑定当前文件。
+- 一套 SSE 通道两种用途：整篇生成 vs 选区改写。助手不再是独立页，而是**随主区上下文切作用域的常驻侧栏**——这正是去重的关键。
+
+### 10.2 选区 → 对话 → 回写（按编辑器分）
+
+**总原则：LLM 只产"替换内容"，实际写回由前端编辑器 API 做**，后端不直接改 office 二进制（避免与 DocServer 抢写坏格式）。
+
+| 编辑器 | 读选区 | 回写 |
+|--------|--------|------|
+| **Excalidraw**（白板/思维导图） | `excalidrawAPI.getSceneElements()` + `appState.selectedElementIds` | LLM 返回新 elements → `updateScene({elements})` 局部替换 → 现有防抖 PUT 保存 |
+| **ONLYOFFICE**（docx/xlsx/pptx） | `docEditor.createConnector()` → `executeMethod("GetSelectedText")` / `callCommand` 跑 Document Builder 读选区 | connector `PasteText` / `callCommand` 替换选区 → ONLYOFFICE 自身 callback 落盘（沿用 P2）。**仅可编辑文档，pdf 只读** |
+| **图片文件**（png/jpg 预览） | 整图或框选区域 | vision 理解 + image 模型重绘 → 替换文件 |
+
+**后端**：新增"选区改写"入口（复用 `/chat/stream` 带 `context`，或新 `/chat/edit`）：
+入参 `{file_path, selection:{type:text|image|elements, content, locator}, instruction}` → 出参"替换内容"（text / new elements / image url）。落盘仍走 office callback（P2）或白板防抖 PUT。
+
+### 10.3 分步落地（建议顺序）
+
+1. **布局合并**：Shell 从 tab 切换 → 三栏常驻；把 App.tsx 的对话逻辑抽成 `AssistantPanel`，主区抽成 `EditorPane`（按后缀路由）。**与 P4 顶栏合并同批做。**
+2. **文档感知**：主区打开文件时，把 `{当前文件, 编辑器类型}` 注入助手上下文，首屏提示"可以让我改这份文档的某段/某图"。
+3. **白板选区编辑先行**（最简单，excalidrawAPI 现成）：选中节点 → 指令 → `updateScene`，跑通"选区→对话→回写"闭环。
+4. **ONLYOFFICE connector 选区编辑**（较重）：先验证社区版 connector 是否支持 `GetSelectedText`/`callCommand`，再接。
+5. **图片重绘**（依赖 image skill）。
+
+**风险/备注**：
+- ONLYOFFICE 社区版 connector 能力边界要先 POC 验证，别假设全支持。
+- 三栏窄屏拥挤 → 助手侧栏与文件树都做成可折叠。
+- P4 与 P5 的顶栏是同一块，务必一起改，避免返工。
