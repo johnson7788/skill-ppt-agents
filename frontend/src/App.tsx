@@ -22,7 +22,7 @@ import {
   Wrench,
   XCircle,
 } from 'lucide-react';
-import { streamChat, answerChat, uploadFile, listUploads, clearUploads, type SSEEvent } from './api';
+import { streamChat, answerChat, uploadFile, listUploads, type SSEEvent } from './api';
 
 // ─── 类型定义 ────────────────────────────────────────────────────────────────
 
@@ -835,22 +835,14 @@ export default function App({
     setIsDragging(false);
   }, []);
 
-  const handleClearFiles = useCallback(async () => {
-    try {
-      await clearUploads(userId);
-      setUploadedFiles([]);
-    } catch (err) {
-      console.error('Clear failed:', err);
-    }
-  }, [userId]);
+  // 仅从提示词上下文移除（不带该文件名/路径），不删除后端文件
+  const handleClearFiles = useCallback(() => {
+    setUploadedFiles([]);
+  }, []);
 
-  const handleRemoveFile = useCallback(
-    async (fileName: string) => {
-      setUploadedFiles((prev) => prev.filter((f) => f.name !== fileName));
-      await clearUploads(userId);
-    },
-    [userId],
-  );
+  const handleRemoveFile = useCallback((fileName: string) => {
+    setUploadedFiles((prev) => prev.filter((f) => f.name !== fileName));
+  }, []);
 
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return bytes + ' B';
