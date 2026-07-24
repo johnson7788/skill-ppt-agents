@@ -9,8 +9,6 @@ services:
       - .env
     environment:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:?err}
-      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:?err}
-      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:?err}
       - WORKERS=${WORKERS:-4}
       - TIMEOUT=${TIMEOUT:-600}
       - WORKER_CONNECTIONS=${WORKER_CONNECTIONS:-1000}
