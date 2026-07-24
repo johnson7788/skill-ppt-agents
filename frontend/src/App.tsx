@@ -22,7 +22,7 @@ import {
   Wrench,
   XCircle,
 } from 'lucide-react';
-import { streamChat, answerChat, uploadFile, listUploads, clearUploads, type SSEEvent } from './api';
+import { streamChat, answerChat, uploadFile, listUploads, clearUploads, readFileText, type SSEEvent } from './api';
 
 // ─── 类型定义 ────────────────────────────────────────────────────────────────
 
@@ -683,7 +683,17 @@ function ClarifyCard({
 
 // ─── 主组件 ──────────────────────────────────────────────────────────────────
 
-export default function App({ userId: extUserId }: { userId?: string } = {}) {
+export default function App({
+  userId: extUserId,
+  hideHeader = false,
+  openFile = null,
+  onDocChanged,
+}: {
+  userId?: string;
+  hideHeader?: boolean;
+  openFile?: { path: string; name: string } | null;
+  onDocChanged?: () => void;
+} = {}) {
   const [messages, setMessages] = useState<HistoryMessage[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
@@ -1037,6 +1047,25 @@ export default function App({ userId: extUserId }: { userId?: string } = {}) {
     }
     // 模版风格提示：让 agent 用选定的预设风格生成 PPT
     const styleHint = style ? `\n\n[PPT 模版风格: ${style}]` : '';
+    // 文档上下文提示：工作台正打开某文件时，让 agent 知道针对该文件工作
+    const isWhiteboard = !!openFile && openFile.name.toLowerCase().endsWith('.excalidraw');
+    let docHint = '';
+    if (openFile && isWhiteboard) {
+      // 白板：把当前完整 JSON 注入，让 agent 用 excalidraw-diagram 产出整份新场景覆盖同名文件
+      let cur = '';
+      try {
+        cur = await readFileText(openFile.path, userId);
+      } catch {
+        /* 读不到就当空白板 */
+      }
+      docHint =
+        `\n\n[当前工作台打开的是白板「${openFile.name}」(路径 ${openFile.path})，它的完整 .excalidraw JSON 如下：\n` +
+        `${cur.trim() || '(空白板)'}\n` +
+        `若用户要新增/修改/删除图中的节点或连线，请用 excalidraw-diagram 技能产出【修改后的完整 .excalidraw JSON】，` +
+        `再调用 save_to_workspace("${openFile.path}", 新JSON) 覆盖保存这个同名文件，不要另存别的文件名；跳过 SKILL 里的渲染校验步骤。]`;
+    } else if (openFile) {
+      docHint = `\n\n[当前正在工作台编辑文件: ${openFile.name}（路径 ${openFile.path}），若用户的修改请求针对该文件，请对其内容操作]`;
+    }
     setMessages((prev) => [
       ...prev,
       { id: `user_${Date.now()}`, role: 'user', text: text + fileHint + styleHint },
@@ -1057,18 +1086,20 @@ export default function App({ userId: extUserId }: { userId?: string } = {}) {
     abortRef.current = ac;
 
     try {
-      await processStream(streamChat(text + styleHint, userId, ac.signal));
+      await processStream(streamChat(text + styleHint + docHint, userId, ac.signal));
       // 流结束但未收到 'done' 事件时，手动收尾
       if (!clarifyPendingRef.current) {
         finalizeAssistant();
       }
+      // 白板可能被 agent 覆盖保存，通知外层重挂编辑器拉取最新内容
+      if (isWhiteboard) onDocChanged?.();
     } catch (err: unknown) {
       handleStreamError(err);
     } finally {
       setIsStreaming(false);
       abortRef.current = null;
     }
-  }, [input, isStreaming, uploadedFiles, processStream, handleStreamError, userId, style]);
+  }, [input, isStreaming, uploadedFiles, processStream, handleStreamError, userId, style, openFile, onDocChanged]);
 
   // 回答 clarify 澄清提问，续接同一 session
   const submitAnswer = useCallback(
@@ -1120,7 +1151,7 @@ export default function App({ userId: extUserId }: { userId?: string } = {}) {
 
   return (
     <div className="h-full flex flex-col bg-[#0b0f19] font-sans selection:bg-blue-500/30">
-      <Header userId={userId} onUserIdChange={setUserId} />
+      {!hideHeader && <Header userId={userId} onUserIdChange={setUserId} />}
 
       <main className="flex-1 overflow-y-auto py-6">
         {/* 欢迎消息 */}
@@ -1224,6 +1255,18 @@ export default function App({ userId: extUserId }: { userId?: string } = {}) {
         </div>
       </div>
 
+      {/* 文档上下文条：工作台打开某文件时显示，助手作用域绑定该文件 */}
+      {openFile && (
+        <div className="w-full max-w-4xl mx-auto px-4 pt-1">
+          <div className="flex items-center gap-1.5 text-[12px] text-blue-300/90 bg-blue-500/10 border border-blue-500/20 rounded-lg px-2.5 py-1.5">
+            <FileText className="w-3.5 h-3.5 shrink-0 text-blue-400/80" />
+            <span className="truncate">
+              正在编辑 <span className="font-medium">{openFile.name}</span> · 可让我改其中某段/某图
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* 输入区域 */}
       <div className="w-full max-w-4xl mx-auto px-4 pb-6 pt-2 shrink-0">
         <div
@@ -1274,7 +1317,7 @@ export default function App({ userId: extUserId }: { userId?: string } = {}) {
                 ? '请先回答上方的确认问题...'
                 : isStreaming
                   ? 'AI 正在思考...'
-                  : '输入你的研究问题...'
+                  : '描述你想生成的内容，如：把季度业绩做成 Excel 表格'
             }
             className="flex-1 bg-transparent text-[15px] text-slate-200 placeholder:text-slate-500 resize-none outline-none py-3 px-3 max-h-32 min-h-[44px] disabled:opacity-50"
           />

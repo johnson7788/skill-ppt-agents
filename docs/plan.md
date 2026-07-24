@@ -166,7 +166,12 @@ DocServer 与后端要能互相通过内网 URL 访问（compose 同网络即可
 
 > 先做 1/2/3（不动配色、见效快），验收后再决定 4/5。**注意 P4 的顶栏合并要和 P5 的三栏布局一起规划，别改两遍。**
 
-## 10. P5 —— 对话即编辑：合并「对话」与「工作台」（TODO，核心改版）
+## 10. P5 —— 对话即编辑：合并「对话」与「工作台」（进行中）
+
+> **进度**：10.3 的 1（布局合并+顶栏）✅、2（文档感知）✅、3（白板对话式编辑）✅ 已落地。
+> 4（ONLYOFFICE connector 选区编辑）需先起真实 DocServer 做 POC，未做；5（图片重绘）依赖尚不存在的 image skill，未做。
+> **白板方案实际落地与 10.2 原设计不同**：不做"选区→LLM 返回局部 elements"（DeepSeek 手写合法 excalidraw 元素 JSON 不稳，且 agent 无读回白板的工具）。改为**整图重画+自动重载**：前端 sendMessage 把当前 `.excalidraw` 完整 JSON 注入消息 → agent 用 excalidraw-diagram 技能产出整份新场景 → `save_to_workspace(同名路径, 新JSON)` 覆盖 → 前端回合结束触发 `onDocChanged` → Shell `reloadNonce+1` → Workspace 用 `key=path:nonce` 重挂 WhiteboardEditor 重新 readFileText。零后端改动，复用现有 skill+save_to_workspace。代价：丢用户手动布局、非选区级、每次整图。
+
 
 **动机**：希望用户打开文件后，能用对话对**某个段落/某张图**做编辑。一旦助手"文档感知"，独立对话页就与工作台重复——**合并成单页**。
 

@@ -117,10 +117,23 @@ function Preview({ node, userId }: { node: FileNode; userId: string }) {
   );
 }
 
-export default function Workspace({ userId }: { userId: string }) {
+export default function Workspace({
+  userId,
+  onOpenFile,
+  reloadNonce = 0,
+}: {
+  userId: string;
+  onOpenFile?: (f: { path: string; name: string } | null) => void;
+  reloadNonce?: number;
+}) {
   const [tree, setTree] = useState<FileNode[]>([]);
   const [selected, setSelected] = useState<FileNode | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // 上报当前打开的文件，供助手侧栏做文档感知
+  useEffect(() => {
+    onOpenFile?.(selected ? { path: selected.path, name: selected.name } : null);
+  }, [selected, onOpenFile]);
 
   const refresh = useCallback(() => {
     setLoading(true);
@@ -194,7 +207,7 @@ export default function Workspace({ userId }: { userId: string }) {
       <div className="flex-1 min-w-0 bg-[#0a0e1a]">
         {selected ? (
           isWhiteboard(selected.name) ? (
-            <WhiteboardEditor key={selected.path} path={selected.path} userId={userId} />
+            <WhiteboardEditor key={`${selected.path}:${reloadNonce}`} path={selected.path} userId={userId} />
           ) : isOffice(selected.name) ? (
             <OfficeEditor key={selected.path} path={selected.path} userId={userId} name={selected.name} />
           ) : (
