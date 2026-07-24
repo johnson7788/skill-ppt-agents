@@ -55,9 +55,11 @@ export async function* streamChat(
   userId: string = 'default_user',
   signal?: AbortSignal,
 ): AsyncGenerator<SSEEvent> {
-  const url = `${API_BASE}/chat/stream?message=${encodeURIComponent(message)}&user_id=${encodeURIComponent(userId)}`;
-  const response = await fetch(url, {
-    headers: { Accept: 'text/event-stream' },
+  // 用 POST 走请求体：白板等大内容注入 message 时，GET 塞 URL 会撑爆请求头触发 HTTP 431
+  const response = await fetch(`${API_BASE}/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    body: JSON.stringify({ message, user_id: userId }),
     signal,
   });
   yield* parseSSE(response);

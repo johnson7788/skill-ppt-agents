@@ -1236,6 +1236,17 @@ async def chat_stream(message: str, user_id: str = "default_user"):
     )
 
 
+class StreamRequest(BaseModel):
+    message: str
+    user_id: str = "default_user"
+
+
+@app.post("/chat/stream")
+async def chat_stream_post(req: StreamRequest):
+    """POST 变体：message 走请求体，避免大内容（如白板完整 JSON）塞进 URL 撑爆请求头触发 431。协议同 GET。"""
+    return await chat_stream(req.message, req.user_id)
+
+
 class AnswerRequest(BaseModel):
     session_id: str
     call_id: str
