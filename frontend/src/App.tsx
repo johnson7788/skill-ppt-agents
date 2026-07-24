@@ -111,19 +111,20 @@ type ExampleQuestion = {
 };
 
 const EXAMPLE_QUESTIONS: ExampleQuestion[] = [
+  // PPT（图片型）
   { question: '把大语言模型的发展脉络做成一套 12 页 PPT' },
-  { question: '生成一份「Mixture-of-Experts 架构」的教学幻灯片' },
-  { question: '为「2024 年 AI 行业趋势」做一套演示，麦肯锡风格' },
-  { question: '帮我做一份公司季度业绩汇报 PPT，数据仪表盘风' },
+  // PPT（可编辑）+ PDF
+  { question: '做一套「Mixture-of-Experts 架构」可编辑幻灯片，并导出 PDF' },
+  // Word 报告
+  { question: '把「2024 年 AI 行业趋势」整理成一份 Word 报告' },
+  // Excel 表格
+  { question: '帮我生成一张公司季度业绩的 Excel 表格，含同比对比' },
+  // 思维导图（.excalidraw → 工作台白板可编辑）
+  { question: '把 Transformer 的核心组件画成一张思维导图，我要在白板里改' },
   // 上传资料 → 据内容生成 PPT
   {
     question: '根据这份讲义生成一套演示文稿',
     demoFile: '/demo/LongContextLLM.pptx',
-  },
-  // 上传风格参考图 → 模仿风格生成
-  {
-    question: '参照这张图的视觉风格，做一套「RAG 技术」介绍 PPT',
-    demoFile: '/demo/benchmark_results.png',
   },
 ];
 
@@ -149,7 +150,7 @@ function Header({
       <Bot className="w-5 h-5 text-blue-400" />
       <span className="font-semibold text-slate-200">PPT</span>
       <ChevronRight className="w-4 h-4 text-slate-500" />
-      <span className="text-slate-400">PPT 生成智能体</span>
+      <span className="text-slate-400">文档生成智能体</span>
       <div className="ml-auto flex items-center gap-2">
         {editing ? (
           <input
@@ -1126,9 +1127,9 @@ export default function App({ userId: extUserId }: { userId?: string } = {}) {
         {messages.length === 0 && !isStreaming && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <Bot className="w-12 h-12 text-blue-400/50 mb-4" />
-            <h2 className="text-xl font-semibold text-slate-300 mb-2">PPT 生成智能体</h2>
+            <h2 className="text-xl font-semibold text-slate-300 mb-2">文档生成智能体</h2>
             <p className="text-slate-500 text-sm max-w-md mb-8">
-              选风格 / 传模版 · 一句话生成整套演示 · 图片型 16:9 幻灯片
+              一句话生成 PPT / PDF / Word / Excel / 思维导图 · 可在工作台在线编辑
             </p>
             <div className="flex flex-wrap justify-center gap-2 max-w-2xl">
               {EXAMPLE_QUESTIONS.map((ex, i) => (

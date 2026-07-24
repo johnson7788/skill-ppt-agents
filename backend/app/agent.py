@@ -93,6 +93,11 @@ dashi_ppt_skill = load_skill_from_dir(
     SKILLS_DIR / "dashi-ppt"
 )
 
+# Skill 5: 思维导图 / 架构图 — 授权原生 .excalidraw JSON，落进工作台白板可编辑
+excalidraw_diagram_skill = load_skill_from_dir(
+    SKILLS_DIR / "excalidraw-diagram"
+)
+
 # ---------------------------------------------------------------------------
 # SkillToolset — 自动生成 list_skills, load_skill, load_skill_resource, run_skill_script
 # ---------------------------------------------------------------------------
@@ -102,6 +107,7 @@ skill_toolset = SkillToolset(
         bing_search_skill,
         ppt_deck_skill,
         dashi_ppt_skill,
+        excalidraw_diagram_skill,
     ]
 )
 
