@@ -7,6 +7,7 @@ import {
   Trash2,
   Upload,
   Download,
+  PenLine,
 } from 'lucide-react';
 import {
   deleteFile,
@@ -14,8 +15,12 @@ import {
   filesTree,
   readFileText,
   uploadFile,
+  writeFileText,
   type FileNode,
 } from './api';
+import WhiteboardEditor from './WhiteboardEditor';
+
+const isWhiteboard = (name: string) => name.toLowerCase().endsWith('.excalidraw');
 
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'];
 const TEXT_EXT = ['txt', 'md', 'json', 'csv', 'log', 'py', 'js', 'ts', 'html', 'css', 'yaml', 'yml', 'xml'];
@@ -151,12 +156,24 @@ export default function Workspace({ userId }: { userId: string }) {
     [userId, selected, refresh],
   );
 
+  const onNewWhiteboard = useCallback(async () => {
+    const name = `whiteboard-${Date.now()}.excalidraw`;
+    await writeFileText(name, '', userId).catch(() => {});
+    const data = await filesTree(userId).catch(() => [] as FileNode[]);
+    setTree(data);
+    const node = data.find((n) => n.path === name);
+    if (node) setSelected(node);
+  }, [userId]);
+
   return (
     <div className="flex h-full">
       {/* 文件树 */}
       <div className="w-64 flex-shrink-0 border-r border-slate-800 flex flex-col bg-[#0d1220]">
         <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-800">
           <span className="text-[13px] font-medium text-slate-300 flex-1">文件</span>
+          <button className="text-slate-400 hover:text-slate-200" title="新建白板" onClick={onNewWhiteboard}>
+            <PenLine size={15} />
+          </button>
           <label className="cursor-pointer text-slate-400 hover:text-slate-200" title="上传">
             <Upload size={15} />
             <input type="file" className="hidden" onChange={onUpload} />
@@ -177,9 +194,15 @@ export default function Workspace({ userId }: { userId: string }) {
       </div>
 
       {/* 编辑/预览区 */}
-      <div className="flex-1 overflow-auto bg-[#0a0e1a]">
+      <div className="flex-1 min-w-0 bg-[#0a0e1a]">
         {selected ? (
-          <Preview node={selected} userId={userId} />
+          isWhiteboard(selected.name) ? (
+            <WhiteboardEditor key={selected.path} path={selected.path} userId={userId} />
+          ) : (
+            <div className="h-full overflow-auto">
+              <Preview node={selected} userId={userId} />
+            </div>
+          )
         ) : (
           <div className="flex items-center justify-center h-full text-slate-600 text-sm">
             从左侧选择一个文件

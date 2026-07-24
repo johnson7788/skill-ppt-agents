@@ -125,12 +125,9 @@ DocServer 与后端要能互相通过内网 URL 访问（compose 同网络即可
 
 ## 8. 分阶段落地
 
-1. **P0 文件底座**：补 `sandbox.read_file` + `/files/tree|raw`，前端文件树。上传改走沙箱。
-   —— 这步完成，文件树能看能读写，两个编辑器才有地基。
-2. **P1 Excalidraw**：装组件 + 读写 `.excalidraw`。（最快见效，纯前端）
-3. **P2 ONLYOFFICE**：起 DocumentServer 容器 + 三个网关端点 + JWT + 前端 iframe。
+1. **P0 文件底座** ✅：`/files/tree|raw`(GET/PUT) + `/files`(DELETE)，前端 `Workspace.tsx` 文件树+预览。
+   —— 决策修正：文档空间用**本地 uploads/<user_id>/**（产物/下载已在这），沙箱仍是代码执行环境，没接 `sandbox.read_file`。
+2. **P1 Excalidraw** ✅：装 `@excalidraw/excalidraw@0.18`，`WhiteboardEditor.tsx` 读写 `.excalidraw`（走 /files/raw，防抖保存）。
+   思维导图/流程图用 Excalidraw 自带的 mermaid→excalidraw，无需额外依赖。
+3. **P2 ONLYOFFICE**（下一步）：起 DocumentServer 容器 + 三个网关端点 + JWT + 前端 iframe。
 4. **P3 Skills 联动**：验证 Agent 产物在编辑器里可编辑、可回喂；按需加 docx/xlsx/mindmap skill。
-
----
-建议先做 P0+P1 打通「文件树 + 白板」跑通闭环，再上 ONLYOFFICE（部署和 JWT 网关是最重的一块）。
-需要我直接开工 P0 就说一声。
