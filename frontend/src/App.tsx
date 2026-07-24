@@ -1118,7 +1118,7 @@ export default function App({ userId: extUserId }: { userId?: string } = {}) {
   }, [input]);
 
   return (
-    <div className="h-screen flex flex-col bg-[#0b0f19] font-sans selection:bg-blue-500/30">
+    <div className="h-full flex flex-col bg-[#0b0f19] font-sans selection:bg-blue-500/30">
       <Header userId={userId} onUserIdChange={setUserId} />
 
       <main className="flex-1 overflow-y-auto py-6">
