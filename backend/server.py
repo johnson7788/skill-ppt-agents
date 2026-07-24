@@ -547,6 +547,101 @@ async def clear_uploads(user_id: str = "default_user"):
 
 
 # ---------------------------------------------------------------------------
+# 文件工作台 API — 以 uploads/<user_id>/ 为用户的文档空间（产物、上传件都在这）
+# 供文件树、Excalidraw、ONLYOFFICE 网关共用。
+# ponytail: 用户文档空间 = 本地 uploads/<user_id>/（现有产物/下载都在这），
+#           沙箱仍是代码执行环境；需要时用 agent 的 sync_upload_to_sandbox 打通。
+# ---------------------------------------------------------------------------
+
+def _safe_user_path(user_id: str, rel: str) -> Path:
+    """把用户相对路径解析为 uploads/<user_id>/ 内的绝对路径，越权则抛 ValueError。"""
+    root = (UPLOADS_DIR / user_id).resolve()
+    target = (root / rel.lstrip("/")).resolve()
+    if target != root and not str(target).startswith(str(root) + os.sep):
+        raise ValueError("越权路径")
+    return target
+
+
+def _build_tree(base: Path, root: Path) -> list[dict]:
+    nodes = []
+    for p in sorted(base.iterdir(), key=lambda x: (x.is_file(), x.name.lower())):
+        st = p.stat()
+        node = {
+            "name": p.name,
+            "path": str(p.relative_to(root)),
+            "type": "directory" if p.is_dir() else "file",
+            "size": st.st_size,
+            "modified": st.st_mtime,
+        }
+        if p.is_dir():
+            node["children"] = _build_tree(p, root)
+        nodes.append(node)
+    return nodes
+
+
+@app.get("/files/tree")
+async def files_tree(user_id: str = "default_user"):
+    """列出用户文档空间的完整文件树。"""
+    root = UPLOADS_DIR / user_id
+    root.mkdir(parents=True, exist_ok=True)
+    root = root.resolve()
+    return JSONResponse({"user_id": user_id, "tree": _build_tree(root, root)})
+
+
+@app.get("/files/raw")
+async def files_raw_get(user_id: str = "default_user", path: str = ""):
+    """读取单个文件原始内容（Excalidraw 加载 / 预览 / ONLYOFFICE 下载共用）。"""
+    if not path:
+        return JSONResponse({"error": "缺少 path"}, status_code=400)
+    try:
+        target = _safe_user_path(user_id, path)
+    except ValueError:
+        return JSONResponse({"error": "非法路径"}, status_code=400)
+    if not target.is_file():
+        return JSONResponse({"error": "文件不存在"}, status_code=404)
+    return FileResponse(str(target), filename=target.name)
+
+
+class WriteFileRequest(BaseModel):
+    path: str
+    content: str
+    user_id: str = "default_user"
+
+
+@app.put("/files/raw")
+async def files_raw_put(req: WriteFileRequest):
+    """写入文本文件（Excalidraw 保存 / 新建文件）。"""
+    if not req.path:
+        return JSONResponse({"error": "缺少 path"}, status_code=400)
+    try:
+        target = _safe_user_path(req.user_id, req.path)
+    except ValueError:
+        return JSONResponse({"error": "非法路径"}, status_code=400)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(req.content, encoding="utf-8")
+    return JSONResponse({"success": True, "path": req.path, "size": len(req.content)})
+
+
+@app.delete("/files")
+async def files_delete(user_id: str = "default_user", path: str = ""):
+    """删除文件或目录。"""
+    import shutil
+    if not path:
+        return JSONResponse({"error": "缺少 path"}, status_code=400)
+    try:
+        target = _safe_user_path(user_id, path)
+    except ValueError:
+        return JSONResponse({"error": "非法路径"}, status_code=400)
+    if target.is_dir():
+        shutil.rmtree(target)
+    elif target.is_file():
+        target.unlink()
+    else:
+        return JSONResponse({"error": "不存在"}, status_code=404)
+    return JSONResponse({"success": True})
+
+
+# ---------------------------------------------------------------------------
 # SSE 缓存管理接口
 # ---------------------------------------------------------------------------
 @app.get("/cache/info")

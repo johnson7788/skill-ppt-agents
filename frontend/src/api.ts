@@ -145,3 +145,55 @@ export async function clearUploads(userId: string = 'default_user') {
   }
   return response.json();
 }
+
+// ─── 文件工作台 ──────────────────────────────────────────────────────────
+
+export interface FileNode {
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
+  size: number;
+  modified: number;
+  children?: FileNode[];
+}
+
+/** 获取用户文档空间的文件树 */
+export async function filesTree(userId: string = 'default_user'): Promise<FileNode[]> {
+  const response = await fetch(`${API_BASE}/files/tree?user_id=${encodeURIComponent(userId)}`);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const data = await response.json();
+  return data.tree as FileNode[];
+}
+
+/** 单个文件的原始内容 URL（可直接给 <img>/下载/编辑器 fetch 用） */
+export function fileRawUrl(path: string, userId: string = 'default_user'): string {
+  return `${API_BASE}/files/raw?user_id=${encodeURIComponent(userId)}&path=${encodeURIComponent(path)}`;
+}
+
+/** 读取文本文件内容 */
+export async function readFileText(path: string, userId: string = 'default_user'): Promise<string> {
+  const response = await fetch(fileRawUrl(path, userId));
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.text();
+}
+
+/** 写入文本文件 */
+export async function writeFileText(path: string, content: string, userId: string = 'default_user') {
+  const response = await fetch(`${API_BASE}/files/raw`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, content, user_id: userId }),
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
+/** 删除文件或目录 */
+export async function deleteFile(path: string, userId: string = 'default_user') {
+  const response = await fetch(
+    `${API_BASE}/files?user_id=${encodeURIComponent(userId)}&path=${encodeURIComponent(path)}`,
+    { method: 'DELETE' },
+  );
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}

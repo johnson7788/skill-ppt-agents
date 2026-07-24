@@ -682,11 +682,16 @@ function ClarifyCard({
 
 // ─── 主组件 ──────────────────────────────────────────────────────────────────
 
-export default function App() {
+export default function App({ userId: extUserId }: { userId?: string } = {}) {
   const [messages, setMessages] = useState<HistoryMessage[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [userId, setUserId] = useState('default_user');
+  const [userId, setUserId] = useState(extUserId ?? 'default_user');
+
+  // 顶层切换器传入的 userId 覆盖本地（工作台与对话共享同一租户）
+  useEffect(() => {
+    if (extUserId) setUserId(extUserId);
+  }, [extUserId]);
   const [style, setStyle] = useState<string>('');  // 选中的预设模版风格，空=不指定
 
   // 流式中间状态

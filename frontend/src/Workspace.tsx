@@ -1,0 +1,191 @@
+import { useCallback, useEffect, useState } from 'react';
+import {
+  File as FileIcon,
+  Folder,
+  FolderOpen,
+  RefreshCw,
+  Trash2,
+  Upload,
+  Download,
+} from 'lucide-react';
+import {
+  deleteFile,
+  fileRawUrl,
+  filesTree,
+  readFileText,
+  uploadFile,
+  type FileNode,
+} from './api';
+
+const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'];
+const TEXT_EXT = ['txt', 'md', 'json', 'csv', 'log', 'py', 'js', 'ts', 'html', 'css', 'yaml', 'yml', 'xml'];
+
+function extOf(name: string): string {
+  const i = name.lastIndexOf('.');
+  return i >= 0 ? name.slice(i + 1).toLowerCase() : '';
+}
+
+function TreeNode({
+  node,
+  depth,
+  selected,
+  onSelect,
+  onDelete,
+}: {
+  node: FileNode;
+  depth: number;
+  selected: string | null;
+  onSelect: (n: FileNode) => void;
+  onDelete: (n: FileNode) => void;
+}) {
+  const [open, setOpen] = useState(depth < 1);
+  const isDir = node.type === 'directory';
+  const isSel = selected === node.path;
+
+  return (
+    <div>
+      <div
+        className={`group flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer text-[13px] ${
+          isSel ? 'bg-blue-600/25 text-blue-200' : 'text-slate-300 hover:bg-slate-800/60'
+        }`}
+        style={{ paddingLeft: 8 + depth * 14 }}
+        onClick={() => (isDir ? setOpen((o) => !o) : onSelect(node))}
+      >
+        {isDir ? (
+          open ? <FolderOpen size={15} className="text-amber-400/90" /> : <Folder size={15} className="text-amber-400/90" />
+        ) : (
+          <FileIcon size={15} className="text-slate-400" />
+        )}
+        <span className="truncate flex-1">{node.name}</span>
+        <Trash2
+          size={13}
+          className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(node);
+          }}
+        />
+      </div>
+      {isDir && open && node.children?.map((c) => (
+        <TreeNode key={c.path} node={c} depth={depth + 1} selected={selected} onSelect={onSelect} onDelete={onDelete} />
+      ))}
+    </div>
+  );
+}
+
+function Preview({ node, userId }: { node: FileNode; userId: string }) {
+  const ext = extOf(node.name);
+  const url = fileRawUrl(node.path, userId);
+  const [text, setText] = useState<string | null>(null);
+
+  useEffect(() => {
+    setText(null);
+    if (TEXT_EXT.includes(ext)) {
+      readFileText(node.path, userId).then(setText).catch(() => setText('（读取失败）'));
+    }
+  }, [node.path, ext, userId]);
+
+  if (IMAGE_EXT.includes(ext)) {
+    return <img src={url} alt={node.name} className="max-w-full max-h-full object-contain mx-auto" />;
+  }
+  if (ext === 'pdf') {
+    return <iframe src={url} title={node.name} className="w-full h-full border-0" />;
+  }
+  if (TEXT_EXT.includes(ext)) {
+    return (
+      <pre className="text-[13px] text-slate-300 whitespace-pre-wrap leading-relaxed p-4 font-mono">
+        {text ?? '加载中…'}
+      </pre>
+    );
+  }
+  // 未支持在线预览的类型（doc/ppt/xls 等，P2 接 ONLYOFFICE 后可编辑）
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400">
+      <FileIcon size={40} className="text-slate-600" />
+      <div className="text-sm">{node.name}</div>
+      <a
+        href={url}
+        download={node.name}
+        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm"
+      >
+        <Download size={15} /> 下载
+      </a>
+      <div className="text-xs text-slate-600">（doc/ppt/xls 在线编辑将由 ONLYOFFICE 提供）</div>
+    </div>
+  );
+}
+
+export default function Workspace({ userId }: { userId: string }) {
+  const [tree, setTree] = useState<FileNode[]>([]);
+  const [selected, setSelected] = useState<FileNode | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const refresh = useCallback(() => {
+    setLoading(true);
+    filesTree(userId)
+      .then(setTree)
+      .catch(() => setTree([]))
+      .finally(() => setLoading(false));
+  }, [userId]);
+
+  useEffect(refresh, [refresh]);
+
+  const onUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      await uploadFile(file, userId).catch(() => {});
+      e.target.value = '';
+      refresh();
+    },
+    [userId, refresh],
+  );
+
+  const onDelete = useCallback(
+    async (node: FileNode) => {
+      if (!confirm(`删除 ${node.name}？`)) return;
+      await deleteFile(node.path, userId).catch(() => {});
+      if (selected?.path === node.path) setSelected(null);
+      refresh();
+    },
+    [userId, selected, refresh],
+  );
+
+  return (
+    <div className="flex h-full">
+      {/* 文件树 */}
+      <div className="w-64 flex-shrink-0 border-r border-slate-800 flex flex-col bg-[#0d1220]">
+        <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-800">
+          <span className="text-[13px] font-medium text-slate-300 flex-1">文件</span>
+          <label className="cursor-pointer text-slate-400 hover:text-slate-200" title="上传">
+            <Upload size={15} />
+            <input type="file" className="hidden" onChange={onUpload} />
+          </label>
+          <button className="text-slate-400 hover:text-slate-200" title="刷新" onClick={refresh}>
+            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-auto py-1">
+          {tree.length === 0 ? (
+            <div className="text-center text-slate-600 text-xs py-8">暂无文件</div>
+          ) : (
+            tree.map((n) => (
+              <TreeNode key={n.path} node={n} depth={0} selected={selected?.path ?? null} onSelect={setSelected} onDelete={onDelete} />
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* 编辑/预览区 */}
+      <div className="flex-1 overflow-auto bg-[#0a0e1a]">
+        {selected ? (
+          <Preview node={selected} userId={userId} />
+        ) : (
+          <div className="flex items-center justify-center h-full text-slate-600 text-sm">
+            从左侧选择一个文件
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
