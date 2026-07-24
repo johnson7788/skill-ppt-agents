@@ -1,6 +1,13 @@
-# PPT 生成智能体
+# 在线办公 + Skills 智能体
 
-基于 Google ADK + DeepSeek 构建的多功能智能体，支持**图片型 PPT 生成（12 种预设风格）、arXiv 论文检索、网页搜索、文件上传问答**，并内置**任务规划、终端执行、代码执行、图片分析（OCR）、人在回路澄清**等智能体能力。通过**旁路解说架构**将 Agent 的工具调用与思考过程翻译为通俗易懂的中文卡片，让非技术用户也能理解 AI 的分析过程。
+一个把**对话式智能体**与**在线办公工作台**合到一起的应用：左边是能查论文、搜网页、生成 PPT、读文件的多技能 Agent，右边是一个「工作台」——文件树 + **ONLYOFFICE 在线编辑 doc/xls/ppt/pdf** + **Excalidraw 白板/思维导图**。智能体产出的文档（PPT、Markdown、CSV、思维导图……）直接落进工作台，点开即可在浏览器里二次编辑，改完还能回喂给 Agent 继续处理。
+
+**两条主线：**
+
+- **Skills 智能体**（基于 Google ADK + DeepSeek）：图片型 PPT 生成（12 种预设风格）、可编辑型 PPT、arXiv 论文检索、网页搜索、文件上传问答，内置任务规划、终端/代码执行、图片分析（OCR）、人在回路澄清；通过**旁路解说架构**把工具调用与思考翻译成通俗中文卡片。
+- **在线办公工作台**：每个用户一个文档空间（`backend/uploads/<user_id>/`），文件树浏览 + 预览，`.docx/.xlsx/.pptx/.pdf` 走 ONLYOFFICE 在线编辑（文字可选中可改），`.excalidraw` 走白板，Agent 产物用 `save_to_workspace` 落地成可编辑文件。
+
+> 目录/集成设计见 [`plan.md`](plan.md)（P0 文件底座 → P1 Excalidraw → P2 ONLYOFFICE → P3 Skills 联动，均已实现并端到端验证）。
 
 ---
 
@@ -8,7 +15,12 @@
 
 | 功能 | 说明 |
 |------|------|
+| **工作台文件空间** | 每个用户一个文档空间（本地 `uploads/<user_id>/`），文件树浏览 + 在线预览（图片/文本/Markdown 内联，其他类型下载），上传/新建/删除 |
+| **ONLYOFFICE 在线编辑** | 在浏览器里编辑 `.docx/.xlsx/.pptx/.pdf`，文字可选中可改；后端做 JWT 网关（签发 config、DocServer 拉原件、保存回写沙箱），社区版容器免费 |
+| **Excalidraw 白板/思维导图** | 纯前端画板，读写 `.excalidraw`，防抖自动保存；思维导图/流程图用其自带的 mermaid→excalidraw 转换 |
+| **产物落地（save_to_workspace）** | Agent 把 Markdown/CSV/JSON/HTML/SVG/思维导图(.md) 等文本交付物写进工作台，自动进文件树，点开即用对应编辑器改 |
 | **图片型 PPT 生成** | 选风格 / 传模版 · 一句话生成整套演示 · 图片型 16:9 幻灯片；12 种预设风格（科研答辩、麦肯锡、党政红等），每页由 qwen-image 生成一整张视觉统一的图，组装为可下载的 `.pptx` |
+| **可编辑型 PPT（dashi-ppt）** | 基于 12 套预置主题编排页面，导出**文字可编辑**的 PPTX/PDF，可在 PowerPoint 或工作台里继续改 |
 | **arXiv 论文检索** | 接入 arXiv 公开 API，支持按相关性/最新提交并行检索、按分类/作者检索、自由检索表达式 |
 | **网页搜索** | 自建 SearXNG 实例，支持通用/新闻/图片/视频搜索，自动重试与诊断 |
 | **文件上传问答** | 支持 PDF、PPTX、PPT、TXT 文件上传，自动提取内容并带位置标记（`[第X页]`、`[幻灯片X]`）注入 LLM 上下文 |
@@ -135,13 +147,65 @@
 
 ---
 
+## 在线办公工作台
+
+前端分「对话」和「工作台」两个页签，共享同一个 `user_id`。工作台把该用户的文档空间当网盘根目录，按文件后缀路由到不同编辑器。
+
+```
+┌── 前端 (Vite:3585) ─────────────────────────────┐
+│  对话页签 (App.tsx)   │   工作台页签 (Workspace.tsx) │
+│  聊天/SSE            │   文件树 │ 预览/编辑区         │
+└──────┬───────────────────────┬────────────────────┘
+       │ SSE                    │ REST 文件API / 编辑器 config
+       ▼                        ▼
+┌── 后端 FastAPI (8585) ──────────────────────────┐
+│  /chat/stream   /files/*   /office/*(网关+JWT)  │
+└──────┬───────────────────────┬───────────────────┘
+       │ 本地文件               │ HTTP 拉取/回写
+       ▼                        ▼
+  uploads/<user_id>/       ONLYOFFICE DocumentServer
+  (文档真身在这)             (独立容器 :8081)
+```
+
+### 关键设计
+
+- **文档空间 = 本地 `backend/uploads/<user_id>/`**，不是沙箱。因为 `generate_ppt`/dashi-ppt 产物写本地、`/download` 也从本地读；沙箱只用于代码执行。文件树 / Excalidraw / ONLYOFFICE 都操作这个本地目录。
+- **路径安全**：所有 `/files/*`、`/office/*` 端点按 `user_id` 定位目录，路径 `resolve()` + `startswith` 规范化，挡住 `../` 越权（`server.py:_safe_user_path`）。
+
+### ONLYOFFICE 网关（doc/xls/ppt/pdf）
+
+DocumentServer 是独立容器，只认 HTTP URL，而文件在本地，所以后端当**文件网关**，全程 JWT（密钥 `OFFICE_JWT_SECRET` 只在后端）：
+
+| 端点 | 作用 |
+|------|------|
+| `GET /office/config` | 读文件信息 → 返回**签名后**的 DocEditor config（含 `document.url`、`document.key`、`callbackUrl`、`token`） |
+| `GET /office/download` | DocServer 来拉原件：验 JWT → 返回文件字节流 |
+| `POST /office/callback` | DocServer 保存回调：`status∈{2,6}` 时下载编辑后文件 → 写回本地 uploads |
+
+- `document.key = md5(user:path:mtime)`：同一版本稳定、内容变则变，否则编辑器显示缓存旧内容。
+- 后缀 → documentType：`.docx→word`、`.xlsx→cell`、`.pptx→slide`、`.pdf→pdf`。
+- DocServer 容器回访后端的地址用 `OFFICE_BACKEND_URL`（`host.docker.internal:8585`，**不能用 localhost**——那是容器自己）。
+- 未配置 `OFFICE_JWT_SECRET` 时，前端 `OfficeEditor.tsx` 自动回退到「下载」。
+
+### Excalidraw 白板
+
+纯前端组件 `WhiteboardEditor.tsx`：读 `.excalidraw`（`GET /files/raw`）→ `<Excalidraw initialData>` → onChange 防抖 800ms → 序列化写回（`PUT /files/raw`）。思维导图/流程图用 Excalidraw 自带的 mermaid→excalidraw，Agent 直接产 mermaid 即可。
+
+### 与 Skills 的联动
+
+- **正向**：Agent 用 `save_to_workspace`（文本产物）或 `generate_ppt`（PPT）把文件写进 uploads → 文件树出现 → 点开即用对应编辑器改。
+- **反向**：编辑器里改完存回 uploads → 用户可让 Agent「基于我刚改的 X.pptx 继续…」，Agent 读同一份文件。
+
+---
+
 ## 智能体能力（工具）
 
-除三个技能（arXiv 论文检索、网页搜索、PPT 生成）外，Agent 还内置以下通用工具，定义在 `backend/app/tools.py`，并在 `backend/app/agent.py` 中注册：
+除四个技能（arXiv 论文检索、网页搜索、图片型 PPT `ppt-deck`、可编辑型 PPT `dashi-ppt`）外，Agent 还内置以下通用工具，定义在 `backend/app/tools.py`，并在 `backend/app/agent.py` 中注册：
 
 | 工具 | 类型 | 说明 |
 |------|------|------|
 | `generate_ppt` | PPT 生成 | 图片型 PPT：模型规划提纲并为每页写出图提示词 → qwen-image 逐页出图 → python-pptx 组装 16:9 `.pptx`，返回下载链接。支持 12 种预设风格（科研答辩风、麦肯锡风格、党政红等） |
+| `save_to_workspace` | 产物落地 | 把文本交付物（Markdown/CSV/JSON/HTML/SVG/思维导图 .md）写进工作台 `uploads/<user_id>/`，自动进文件树可编辑（5MB 上限，`../` 越权拦截） |
 | `todo` | 任务规划 | 拆解复杂任务为待办清单并跟踪进度，状态存于会话 state（单轮会话内有效） |
 | `terminal` | 终端执行 | `subprocess` 执行 shell 命令，返回 stdout/stderr/returncode（高权限，请在受信部署边界内使用） |
 | `execute_code` | 代码执行 | Google ADK 内置 `UnsafeLocalCodeExecutor`，自动编写并运行 Python 代码处理数据/计算 |
@@ -256,7 +320,7 @@ Agent 规划提纲，为每页写英文出图 prompt + 中文演讲备注
 skill-ppt-agents/
 ├── .env                          # 环境变量（API Key、端口等）
 ├── Dockerfile                    # 生产镜像（Python 3.12 + Node 20 + Gunicorn）
-├── docker-compose.yml            # 容器编排（2 CPU、2G RAM）
+├── docker-compose.yml            # 容器编排（arxiv-agent + onlyoffice documentserver:8081）
 ├── sandbox-image/                # 沙箱镜像（python:3.12 + pandoc + 技能脚本预装）
 ├── prepare.sh                    # 一次性环境准备：检查 Docker、拉取 execd 镜像、构建沙箱镜像、写入 OpenSandbox 服务端配置与 CLI 配置
 ├── start_sandbox.sh              # 启动 OpenSandbox 服务端（:8080，幂等——已在运行则自动跳过）；沙箱由后端连接池按租户自动创建
@@ -265,11 +329,11 @@ skill-ppt-agents/
 │
 ├── backend/
 │   ├── pyproject.toml            # Python 依赖（hatchling 构建）
-│   ├── server.py                 # FastAPI 服务端（SSE 流式、文件上传、缓存、文件下载）
+│   ├── server.py                 # FastAPI 服务端（SSE 流式、文件上传/下载、缓存、/files/* 文件树、/office/* ONLYOFFICE 网关）
 │   ├── client.py                 # CLI 客户端（模拟前端，消费 SSE）
 │   ├── app/
 │   │   ├── agent.py              # Agent 定义（DeepSeek + 技能 + 工具 + 回调）
-│   │   ├── tools.py             # 自定义工具：generate_ppt / todo / terminal / vision_analyze / clarify
+│   │   ├── tools.py             # 自定义工具：generate_ppt / save_to_workspace / todo / terminal / vision_analyze / clarify
 │   │   ├── sandbox.py           # 多租户沙箱隔离（OpenSandbox 预热池 + 每租户独占 + 闲置回收）
 │   │   ├── create_model.py      # 模型工厂（10+ 供应商，统一走 LiteLLM）
 │   │   ├── narrator.py           # 旁路解说回调逻辑（三回调 + 格式化）
@@ -279,7 +343,8 @@ skill-ppt-agents/
 │   │   └── skills/
 │   │       ├── arxiv-paper-search/       # arXiv 学术论文检索
 │   │       ├── bingsearch/               # Bing 网页搜索
-│   │       └── ppt-deck/                # 图片型 PPT 生成（12 种预设风格）
+│   │       ├── ppt-deck/                # 图片型 PPT 生成（12 种预设风格）
+│   │       └── dashi-ppt/               # 可编辑型 PPT（12 套主题，导出文字可编辑 PPTX/PDF）
 │   ├── cache/                    # SSE 响应缓存（JSON 文件）
 │   ├── logs/                     # 会话日志（JSONL）
 │   └── uploads/                  # 用户上传文件 + 生成的 PPT
@@ -289,8 +354,12 @@ skill-ppt-agents/
 │   ├── vite.config.ts
 │   ├── public/demo/             # 内置演示文件（PPT、基准结果表图片）
 │   └── src/
-│       ├── App.tsx               # 主界面（时间线、工具卡片、思考卡片、澄清卡片、PPT 风格选择、Markdown）
-│       ├── api.ts                # SSE 客户端（streamChat/answerChat）、文件上传/列表/清理 API
+│       ├── main.tsx              # Shell：对话/工作台 两个页签 + 共享 userId
+│       ├── App.tsx               # 对话界面（时间线、工具卡片、思考卡片、澄清卡片、PPT 风格选择、Markdown）
+│       ├── Workspace.tsx         # 工作台：文件树 + 预览 + 按后缀路由到编辑器（上传/新建白板/删除）
+│       ├── WhiteboardEditor.tsx  # Excalidraw 白板（读写 .excalidraw，防抖保存）
+│       ├── OfficeEditor.tsx      # ONLYOFFICE 编辑器（加载 api.js 嵌 DocEditor，未配置回退下载）
+│       ├── api.ts                # SSE 客户端 + 文件 API（tree/raw/上传/删除）
 │       └── index.css             # Tailwind + 自定义样式
 │
 ├── manage_backend/               # 管理后端（FastAPI，端口 8686）
@@ -312,6 +381,7 @@ skill-ppt-agents/
 │           └── OptimizePage.tsx  # LLM 驱动的智能优化建议
 │
 ├── test/                         # 集成测试（pytest + httpx）
+│   ├── test_office_files.py     # 工作台文件 API + ONLYOFFICE 网关 + save_to_workspace（进程内 ASGI）
 │   ├── test_specific_question.py # 论文问答 + 缓存测试
 │   └── test_ppt_qa.py            # PPT 上传 + 幻灯片引用问答测试
 │
@@ -342,6 +412,29 @@ cp backend/env_example backend/.env
 
 ```
 
+### 启用在线编辑（ONLYOFFICE，可选）
+
+不配也能用工作台（预览 + 白板 + 下载），只有 `.docx/.xlsx/.pptx/.pdf` 的**在线编辑**需要 DocumentServer 容器。
+
+```bash
+# 1. 在 .env 里配好共享密钥（后端与容器必须一致）
+#    OFFICE_JWT_SECRET=<一段足够长的随机串>
+#    OFFICE_PORT=8081
+#    OFFICE_BACKEND_URL=http://host.docker.internal:8585   # 不是 localhost
+
+# 2. 起 DocumentServer 容器（社区版，免费）
+docker run -d --name onlyoffice-documentserver -p 8081:80 \
+  -e JWT_ENABLED=true -e JWT_SECRET="$OFFICE_JWT_SECRET" \
+  onlyoffice/documentserver
+#   首次拉镜像 ~2GB；等 `curl -s localhost:8081/healthcheck` 返回 true 即就绪
+
+# 3. 工作台里点开 .docx/.pptx 即可在线编辑，保存自动回写 uploads/<user_id>/
+```
+
+> compose 里也有 `documentserver` 服务，但 `docker compose up documentserver` 会插值整个
+> compose 文件（arxiv 服务需要额外变量）；只验证在线编辑时直接用上面的 `docker run` 更省事。
+> 端到端链路（容器拉原件 + 保存回写）已由 `test/test_office_files.py` 覆盖。
+
 ### CLI 客户端（无需前端）
 
 ```bash
@@ -365,10 +458,14 @@ docker compose up --build -d    # 容器端口 8046
 
 ```bash
 cd test
-pytest test_ppt_qa.py -v                    # PPT 上传 + 问答测试
-pytest test_specific_question.py -v         # 论文问答 + 缓存测试
+pytest test_office_files.py -v              # 工作台文件 API + ONLYOFFICE 网关 + 落地（进程内 ASGI，无需起服务/Docker）
+pytest test_ppt_qa.py -v                    # PPT 上传 + 问答测试（需后端已启动）
+pytest test_specific_question.py -v         # 论文问答 + 缓存测试（需后端已启动）
 TEST_SERVER_URL=http://host:port pytest . -v  # 对远程服务器测试
 ```
+
+> `test_office_files.py` 直接把 FastAPI app 挂到 httpx ASGITransport 上跑，覆盖 P0 文件读写删 + `../` 越权、
+> P2 网关 config 签发/download 验签/callback 写回、P3 `save_to_workspace`，15 个用例，无需 Docker 或运行中的服务。
 
 ---
 
@@ -383,6 +480,13 @@ TEST_SERVER_URL=http://host:port pytest . -v  # 对远程服务器测试
 | `GET` | `/uploads?user_id=...` | **列出用户上传的文件** |
 | `DELETE` | `/uploads?user_id=...` | **清理用户所有上传文件** |
 | `GET` | `/download?user_id=...&file=...` | **下载产物文件**（如生成的 `.pptx`），仅限 `uploads/<user_id>/` 内 |
+| `GET` | `/files/tree?user_id=...` | **工作台文件树**（递归列出用户文档空间） |
+| `GET` | `/files/raw?user_id=...&path=...` | **读取单个文件**（Excalidraw 加载 / 预览 / office 下载共用） |
+| `PUT` | `/files/raw` | **写入文本文件**（body: `path`/`content`/`user_id`；Excalidraw 保存、新建文件） |
+| `DELETE` | `/files?user_id=...&path=...` | **删除文件或目录** |
+| `GET` | `/office/config?user_id=...&path=...` | **签发 ONLYOFFICE DocEditor 配置**（JWT 签名，含 docserver 地址） |
+| `GET` | `/office/download?token=...` | **DocServer 拉取原件**（验签 → 文件字节流） |
+| `POST` | `/office/callback?token=...` | **DocServer 保存回调**（验签 → status 2/6 时写回沙箱） |
 | `GET` | `/cache/info` | **缓存统计信息** |
 | `DELETE` | `/cache` | **清空 SSE 缓存** |
 | `GET` | `/health` | **健康检查** |
@@ -541,6 +645,10 @@ cd manage_frontend && npm install && npm run dev               # 管理前端（
 | `SANDBOX_API_KEY` | OpenSandbox API 密钥 | `123456` |
 | `SANDBOX_TIMEOUT_MINUTES` | 单沙箱硬性存活上限（分钟），活跃自动续期 | `30` |
 | `SANDBOX_IDLE_MINUTES` | 租户闲置多久后回收其沙箱（分钟） | `15` |
+| `OFFICE_JWT_SECRET` | ONLYOFFICE JWT 密钥（后端与 DocServer 共享；**留空则关闭在线编辑**，前端回退下载） | — |
+| `OFFICE_PORT` | DocumentServer 容器对外端口（8080 被 OpenSandbox 占，用 8081） | `8081` |
+| `OFFICE_DOCSERVER_URL` | 浏览器访问 DocServer 的地址（加载 api.js） | `http://localhost:8081` |
+| `OFFICE_BACKEND_URL` | DocServer 容器回访后端的地址（download/callback），**不能用 localhost** | `http://host.docker.internal:8585` |
 
 ---
 
@@ -572,28 +680,51 @@ cd manage_frontend && npm install && npm run dev               # 管理前端（
 
 ---
 
-## 扩展工具解说
+## 二次开发
 
-新增工具后，在 `backend/app/narrator_rules.py` 的 `TOOL_LABELS` 中添加映射，工具调用才会生成解说卡片：
+### 1. 新增一个工具（FunctionTool）
+
+在 `backend/app/tools.py` 写一个函数（第一个/末尾参数按需接 `tool_context: ToolContext` 拿到 `user_id`、session state），docstring 会作为工具说明喂给模型：
+
+```python
+def my_tool(query: str, tool_context: ToolContext) -> dict:
+    """一句话说清这个工具干什么、什么时候用、返回什么。"""
+    user_id = str(tool_context.state.get("_sbkey") or tool_context.user_id or "default_user")
+    ...
+    return {"success": True, ...}
+```
+
+然后在 `backend/app/agent.py` 的 `root_agent.tools=[...]` 里注册 `FunctionTool(my_tool)`，并在 `backend/app/instruction.md` 里补一句工具说明（让模型知道何时调用）。
+
+### 2. 给工具加解说卡片
+
+在 `backend/app/narrator_rules.py` 的 `TOOL_LABELS` 中加映射，工具调用才会生成友好卡片：
 
 ```python
 TOOL_LABELS = {
-    # 精确匹配
-    "new_tool_name": {
-        "label": "友好中文名",
-        "icon": "🔧",
-        "detail": "工具做什么的详细说明",
-    },
-    # 子串模糊匹配（_ 前缀）
-    "_search": {
-        "label": "搜索信息",
-        "icon": "🔍",
-        "detail": "查找相关资料和信息",
-    },
+    "my_tool": {"label": "友好中文名", "icon": "🔧", "detail": "工具做什么的详细说明"},
+    "_search": {"label": "搜索信息", "icon": "🔍", "detail": "查找相关资料和信息"},  # _ 前缀=子串模糊匹配
 }
 ```
 
-未匹配的工具名自动转为标题大写可读文本（如 `run_command` → `Run Command`），显示 🔧 图标。
+未匹配的工具名自动转成标题大写（`run_command` → `Run Command`），显示 🔧。
+
+### 3. 新增一个 Skill（技能）
+
+在 `backend/app/skills/<skill-name>/` 下放 `SKILL.md`（分步指导）+ `scripts/`（Python 脚本），然后在 `agent.py` 里 `load_skill_from_dir(...)` 加进 `SkillToolset(skills=[...])`。模型通过 `list_skills`/`load_skill`/`run_skill_script` 自动发现调用。也可以在管理端 `/skills` 页面在线创建/编辑（自动存版本快照）。
+
+### 4. 工作台支持一种新文件类型 / 编辑器
+
+编辑区在 `frontend/src/Workspace.tsx` 里**按后缀路由**：`.excalidraw`→`WhiteboardEditor`，office 类型→`OfficeEditor`，其余→内联预览/下载。要接新编辑器：
+
+1. 写一个组件，用 `GET /files/raw` 读、`PUT /files/raw` 写（都带 `user_id`+`path`）。
+2. 在 `Workspace.tsx` 的后缀判断里加一个分支路由到它。
+
+后端文件读写走 `server.py:_safe_user_path`（已带 `../` 越权防护），一般无需改后端。若新类型也要在线协同编辑，参考 `/office/*` 网关的 JWT 模式。
+
+### 5. 换模型 / 供应商
+
+`backend/app/create_model.py` 是模型工厂，统一走 LiteLLM，支持 10+ 供应商。改 `.env` 里的 `MODEL_PROVIDER`/`MODEL_NAME` 即可切换，无需改代码。
 
 ---
 
