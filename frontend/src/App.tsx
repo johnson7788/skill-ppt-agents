@@ -1269,6 +1269,21 @@ export default function App({
 
       {/* 输入区域 */}
       <div className="w-full max-w-4xl mx-auto px-4 pb-6 pt-2 shrink-0">
+        {/* 模版风格行：仅生成 PPT 时用，移出输入行避免喧宾夺主 */}
+        <div className="flex items-center gap-2 mb-2 px-1">
+          <span className="text-[12px] text-slate-500">PPT 模版</span>
+          <select
+            value={style}
+            onChange={(e) => setStyle(e.target.value)}
+            title="PPT 模版风格"
+            className="shrink-0 bg-[#0b0f19] border border-slate-700/60 rounded-lg text-[12px] text-slate-300 outline-none py-1 px-2 max-w-[9rem] focus:border-slate-500/60"
+          >
+            <option value="">不指定</option>
+            {PPT_STYLES.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
         <div
           className={`bg-[#151b28] border rounded-2xl flex items-end p-2 transition-colors shadow-lg shadow-black/20 ${
             isDragging ? 'border-blue-500/60' : 'border-slate-700/60 focus-within:border-slate-500/60'
@@ -1294,17 +1309,6 @@ export default function App({
             onChange={handleFileSelect}
             className="hidden"
           />
-          <select
-            value={style}
-            onChange={(e) => setStyle(e.target.value)}
-            title="PPT 模版风格"
-            className="mb-1 mr-1 shrink-0 bg-[#0b0f19] border border-slate-700/60 rounded-xl text-[13px] text-slate-300 outline-none py-2.5 px-2 max-w-[9rem] focus:border-slate-500/60"
-          >
-            <option value="">模版：不指定</option>
-            {PPT_STYLES.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
           <textarea
             ref={textareaRef}
             rows={1}
