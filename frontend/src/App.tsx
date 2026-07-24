@@ -146,9 +146,9 @@ function Header({
   }, [editing]);
 
   return (
-    <header className="flex items-center gap-2 px-4 py-3 border-b border-slate-800 text-sm font-medium text-slate-300">
-      <Bot className="w-5 h-5 text-blue-400" />
-      <span className="font-semibold text-slate-200">PPT</span>
+    <header className="flex items-center gap-2 px-4 py-3 border-b border-slate-200 text-sm font-medium text-slate-700">
+      <Bot className="w-5 h-5 text-blue-600" />
+      <span className="font-semibold text-slate-800">PPT</span>
       <ChevronRight className="w-4 h-4 text-slate-500" />
       <span className="text-slate-400">文档生成智能体</span>
       <div className="ml-auto flex items-center gap-2">
@@ -171,7 +171,7 @@ function Header({
                 setEditing(false);
               }
             }}
-            className="bg-[#0b0f19] border border-slate-700 rounded px-2 py-1 text-[13px] text-slate-200 outline-none w-36"
+            className="bg-slate-50 border border-slate-200 rounded px-2 py-1 text-[13px] text-slate-800 outline-none w-36"
           />
         ) : (
           <button
@@ -179,7 +179,7 @@ function Header({
               setValue(userId);
               setEditing(true);
             }}
-            className="flex items-center gap-1.5 text-[12px] text-slate-500 hover:text-slate-300 transition-colors bg-slate-800/40 hover:bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700/50"
+            className="flex items-center gap-1.5 text-[12px] text-slate-500 hover:text-slate-700 transition-colors bg-slate-100 hover:bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200"
           >
             <User className="w-3.5 h-3.5" />
             {userId}
@@ -224,28 +224,28 @@ function SubCallRow({ call }: { call: ToolCall }) {
     <div className="py-1.5">
       <div className="flex items-center gap-2 text-[13px]">
         {call.status === 'running' ? (
-          <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin flex-shrink-0" />
+          <Loader2 className="w-3.5 h-3.5 text-amber-600 animate-spin flex-shrink-0" />
         ) : call.status === 'error' ? (
-          <XCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+          <XCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
         ) : (
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
         )}
         <span className="text-slate-400">{getToolIcon(call.tool_name)}</span>
-        <span className="text-slate-300 font-medium">{call.display_name}</span>
+        <span className="text-slate-700 font-medium">{call.display_name}</span>
         <span
           className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${
             call.status === 'running'
-              ? 'bg-amber-500/10 text-amber-400'
+              ? 'bg-amber-500/10 text-amber-600'
               : call.status === 'error'
-                ? 'bg-red-500/10 text-red-400'
-                : 'bg-emerald-500/10 text-emerald-400'
+                ? 'bg-red-500/10 text-red-600'
+                : 'bg-emerald-500/10 text-emerald-600'
           }`}
         >
           {call.status === 'running' ? '执行中...' : call.status === 'error' ? '错误' : '完成'}
         </span>
         {!isTodo && hasResult && (
           <button
-            className="ml-auto text-[11px] text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-0.5"
+            className="ml-auto text-[11px] text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-0.5"
             onClick={() => setShowResult(!showResult)}
           >
             {showResult ? (
@@ -282,8 +282,8 @@ function SubCallRow({ call }: { call: ToolCall }) {
         <div className="mt-2 ml-5.5">
           <pre className={`text-[12px] rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-all font-mono leading-relaxed max-h-80 overflow-y-auto ${
             call.status === 'error'
-              ? 'bg-red-950/30 text-red-300'
-              : 'bg-slate-900/50 text-slate-400'
+              ? 'bg-red-50 text-red-700'
+              : 'bg-slate-100 text-slate-400'
           }`}>
             {call.result_summary}
           </pre>
@@ -304,9 +304,9 @@ interface TodoItem {
 function TodoIcon({ status }: { status: TodoItem['status'] }) {
   switch (status) {
     case 'completed':
-      return <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />;
+      return <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />;
     case 'in_progress':
-      return <Loader2 className="w-4 h-4 text-blue-400 animate-spin shrink-0" />;
+      return <Loader2 className="w-4 h-4 text-blue-600 animate-spin shrink-0" />;
     case 'cancelled':
       return <XCircle className="w-4 h-4 text-slate-500 shrink-0" />;
     default:
@@ -326,8 +326,8 @@ function TodoCard({ todos }: { todos: TodoItem[] }) {
               : t.status === 'cancelled'
                 ? 'text-slate-500 line-through'
                 : t.status === 'in_progress'
-                  ? 'text-slate-200 bg-blue-500/5 border border-blue-500/10'
-                  : 'text-slate-300'
+                  ? 'text-slate-800 bg-blue-500/5 border border-blue-500/10'
+                  : 'text-slate-700'
           }`}
         >
           <TodoIcon status={t.status} />
@@ -349,19 +349,19 @@ function ToolStepCard({ step }: { step: ToolStep }) {
     : `${toolNames[0]} + 等 ${toolNames.length - 1} 个工具`;
 
   return (
-    <div className="bg-[#151b28] border border-slate-800/80 rounded-xl overflow-hidden">
+    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <div
-        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-slate-800/30 transition-colors"
+        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors"
         onClick={() => setOpen(!open)}
       >
-        <div className="flex items-center gap-3 text-[14px] text-slate-300">
+        <div className="flex items-center gap-3 text-[14px] text-slate-700">
           {open ? (
             <ChevronDown className="w-4 h-4 text-slate-500" />
           ) : (
             <ChevronRight className="w-4 h-4 text-slate-500" />
           )}
           {hasRunning ? (
-            <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+            <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
           ) : (
             getToolIcon(step.calls[0]?.tool_name || '')
           )}
@@ -371,7 +371,7 @@ function ToolStepCard({ step }: { step: ToolStep }) {
       </div>
       {open && step.calls.length > 0 && (
         <div className="px-5 pb-3 pt-1">
-          <div className="border-l-2 border-slate-800/80 pl-4 py-1 space-y-1">
+          <div className="border-l-2 border-slate-200 pl-4 py-1 space-y-1">
             {step.calls.map((call) => (
               <SubCallRow key={call.id} call={call} />
             ))}
@@ -391,7 +391,7 @@ function ThoughtCard({ thought, thinking = false }: { thought: ThoughtItem; thin
   return (
     <div className="inline-flex flex-col max-w-full">
       <div
-        className="inline-flex items-center gap-2 px-4 py-2 bg-[#1e1b4b]/40 border border-indigo-500/30 rounded-lg text-indigo-300 text-[14px] font-medium cursor-pointer hover:bg-[#1e1b4b]/60 transition-colors w-max"
+        className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 border border-indigo-500/30 rounded-lg text-indigo-700 text-[14px] font-medium cursor-pointer hover:bg-indigo-100 transition-colors w-max"
         onClick={() => setOpen(!open)}
       >
         {open ? (
@@ -412,7 +412,7 @@ function ThoughtCard({ thought, thinking = false }: { thought: ThoughtItem; thin
         )}
       </div>
       {open && (
-        <div className="mt-1 px-4 py-3 bg-[#1e1b4b]/20 border border-indigo-500/20 rounded-lg text-[13px] text-slate-400 leading-relaxed whitespace-pre-wrap max-w-2xl">
+        <div className="mt-1 px-4 py-3 bg-indigo-50 border border-indigo-500/20 rounded-lg text-[13px] text-slate-400 leading-relaxed whitespace-pre-wrap max-w-2xl">
           {thought.raw.replace(/\s+/g, ' ').trim()}
         </div>
       )}
@@ -427,8 +427,8 @@ function AssistantMessage({ msg }: { msg: HistoryMessage }) {
 
   return (
     <div className="flex gap-4 w-full max-w-4xl mx-auto px-4 mb-6">
-      <div className="w-8 h-8 bg-[#1e293b] rounded-full flex items-center justify-center border border-slate-700/50 flex-shrink-0 mt-1">
-        <Bot className="w-4 h-4 text-blue-400" />
+      <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center border border-slate-200 flex-shrink-0 mt-1">
+        <Bot className="w-4 h-4 text-blue-600" />
       </div>
       <div className="flex-1 flex flex-col gap-2 min-w-0">
         {/* 优先按时序渲染 */}
@@ -444,11 +444,11 @@ function AssistantMessage({ msg }: { msg: HistoryMessage }) {
                 <div key={`tx-${i}`}>
                   {isFinal && (
                     <div className="flex items-center gap-2 mb-1.5 px-1">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      <span className="text-[13px] font-medium text-emerald-400">最终结果</span>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span className="text-[13px] font-medium text-emerald-600">最终结果</span>
                     </div>
                   )}
-                  <div className="bg-[#151b28] border border-slate-800/80 rounded-xl p-6 text-[15px] text-slate-200 prose-invert">
+                  <div className="bg-white border border-slate-200 rounded-xl p-6 text-[15px] text-slate-800 prose-invert">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
@@ -458,7 +458,7 @@ function AssistantMessage({ msg }: { msg: HistoryMessage }) {
                           </div>
                         ),
                         thead: ({ children }) => (
-                          <thead className="border-b border-slate-700/60 text-slate-400 text-[14px]">
+                          <thead className="border-b border-slate-300 text-slate-400 text-[14px]">
                             {children}
                           </thead>
                         ),
@@ -466,7 +466,7 @@ function AssistantMessage({ msg }: { msg: HistoryMessage }) {
                           <th className="py-3 px-4 font-medium">{children}</th>
                         ),
                         td: ({ children }) => (
-                          <td className="py-3 px-4 text-slate-300 border-b border-slate-800/40">
+                          <td className="py-3 px-4 text-slate-700 border-b border-slate-200">
                             {children}
                           </td>
                         ),
@@ -474,13 +474,13 @@ function AssistantMessage({ msg }: { msg: HistoryMessage }) {
                           const isBlock = className?.includes('language-');
                           if (isBlock) {
                             return (
-                              <pre className="bg-[#0b0f19] border border-slate-800 rounded-lg p-4 overflow-x-auto text-[13px]">
+                              <pre className="bg-slate-50 border border-slate-200 rounded-lg p-4 overflow-x-auto text-[13px]">
                                 <code>{children}</code>
                               </pre>
                             );
                           }
                           return (
-                            <code className="bg-[#1e293b] text-blue-300 px-2 py-0.5 rounded text-[13px] border border-slate-700/50">
+                            <code className="bg-slate-100 text-blue-700 px-2 py-0.5 rounded text-[13px] border border-slate-200">
                               {children}
                             </code>
                           );
@@ -490,7 +490,7 @@ function AssistantMessage({ msg }: { msg: HistoryMessage }) {
                             href={href}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-blue-400 hover:text-blue-300 underline"
+                            className="text-blue-600 hover:text-blue-700 underline"
                           >
                             {children}
                           </a>
@@ -503,7 +503,7 @@ function AssistantMessage({ msg }: { msg: HistoryMessage }) {
                           <ol className="list-decimal pl-5 space-y-1 mb-3">{children}</ol>
                         ),
                         strong: ({ children }) => (
-                          <strong className="text-slate-100 font-bold">{children}</strong>
+                          <strong className="text-slate-900 font-bold">{children}</strong>
                         ),
                       }}
                     >
@@ -526,7 +526,7 @@ function AssistantMessage({ msg }: { msg: HistoryMessage }) {
               <ThoughtCard key={i} thought={t} />
             ))}
             {msg.text && (
-              <div className="bg-[#151b28] border border-slate-800/80 rounded-xl p-6 text-[15px] text-slate-200 prose-invert">
+              <div className="bg-white border border-slate-200 rounded-xl p-6 text-[15px] text-slate-800 prose-invert">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
               </div>
             )}
@@ -563,8 +563,8 @@ function LiveAgentRow({
 
   return (
     <div className="flex gap-4 w-full max-w-4xl mx-auto px-4 mb-6">
-      <div className="w-8 h-8 bg-[#1e293b] rounded-full flex items-center justify-center border border-slate-700/50 flex-shrink-0 mt-1">
-        <Bot className="w-4 h-4 text-blue-400" />
+      <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center border border-slate-200 flex-shrink-0 mt-1">
+        <Bot className="w-4 h-4 text-blue-600" />
       </div>
       <div className="flex-1 flex flex-col gap-2 min-w-0">
         {/* 时序渲染已刷入的内容 */}
@@ -581,7 +581,7 @@ function LiveAgentRow({
             return (
               <div
                 key={`tx-${i}`}
-                className="bg-[#151b28] border border-slate-800/80 rounded-xl p-6 text-[15px] text-slate-200"
+                className="bg-white border border-slate-200 rounded-xl p-6 text-[15px] text-slate-800"
               >
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.text}</ReactMarkdown>
               </div>
@@ -592,15 +592,15 @@ function LiveAgentRow({
 
         {/* 状态指示：流式中且还没有正在显示的文本 */}
         {isStreaming && !displayedText && (
-          <div className="flex items-center gap-2 px-4 py-3 bg-[#151b28] border border-slate-800/80 rounded-xl text-[14px] text-slate-400">
-            <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+          <div className="flex items-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-xl text-[14px] text-slate-400">
+            <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
             {getStatusText()}
           </div>
         )}
 
         {/* 正在流式输出的文字（还未刷入 timeline） */}
         {displayedText && (
-          <div className="bg-[#151b28] border border-slate-800/80 rounded-xl p-6 text-[15px] text-slate-200">
+          <div className="bg-white border border-slate-200 rounded-xl p-6 text-[15px] text-slate-800">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayedText}</ReactMarkdown>
             {isStreaming && (
               <span className="inline-block w-0.5 h-4 bg-blue-500 ml-0.5 animate-pulse align-text-bottom" />
@@ -625,16 +625,16 @@ function ClarifyCard({
 
   return (
     <div className="flex gap-4 w-full max-w-4xl mx-auto px-4 mb-6">
-      <div className="w-8 h-8 bg-[#1e293b] rounded-full flex items-center justify-center border border-slate-700/50 flex-shrink-0 mt-1">
-        <HelpCircle className="w-4 h-4 text-amber-400" />
+      <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center border border-slate-200 flex-shrink-0 mt-1">
+        <HelpCircle className="w-4 h-4 text-amber-600" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="bg-[#1c1a12] border border-amber-500/30 rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-3 text-[13px] font-medium text-amber-400">
+        <div className="bg-amber-50 border border-amber-500/30 rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-3 text-[13px] font-medium text-amber-600">
             <HelpCircle className="w-4 h-4" />
             需要你确认
           </div>
-          <div className="text-[15px] text-slate-200 mb-4 whitespace-pre-wrap">
+          <div className="text-[15px] text-slate-800 mb-4 whitespace-pre-wrap">
             {clarify.question}
           </div>
           {clarify.choices.length > 0 && (
@@ -644,7 +644,7 @@ function ClarifyCard({
                   key={i}
                   disabled={disabled}
                   onClick={() => onAnswer(choice)}
-                  className="px-4 py-2 text-[14px] rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 hover:bg-amber-500/20 hover:border-amber-500/50 transition-colors disabled:opacity-40"
+                  className="px-4 py-2 text-[14px] rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 hover:bg-amber-500/20 hover:border-amber-500/50 transition-colors disabled:opacity-40"
                 >
                   {choice}
                 </button>
@@ -665,7 +665,7 @@ function ClarifyCard({
                 }
               }}
               placeholder="或输入你的回答..."
-              className="flex-1 bg-[#0b0f19] border border-slate-700/60 focus:border-amber-500/50 rounded-lg text-[14px] text-slate-200 placeholder:text-slate-500 resize-none outline-none py-2.5 px-3 max-h-32 min-h-[42px]"
+              className="flex-1 bg-slate-50 border border-slate-300 focus:border-amber-500/50 rounded-lg text-[14px] text-slate-800 placeholder:text-slate-500 resize-none outline-none py-2.5 px-3 max-h-32 min-h-[42px]"
             />
             <button
               disabled={disabled || !custom.trim()}
@@ -1150,15 +1150,15 @@ export default function App({
   }, [input]);
 
   return (
-    <div className="h-full flex flex-col bg-[#0b0f19] font-sans selection:bg-blue-500/30">
+    <div className="h-full flex flex-col bg-slate-50 font-sans selection:bg-blue-500/30">
       {!hideHeader && <Header userId={userId} onUserIdChange={setUserId} />}
 
       <main className="flex-1 overflow-y-auto py-6">
         {/* 欢迎消息 */}
         {messages.length === 0 && !isStreaming && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <Bot className="w-12 h-12 text-blue-400/50 mb-4" />
-            <h2 className="text-xl font-semibold text-slate-300 mb-2">文档生成智能体</h2>
+            <Bot className="w-12 h-12 text-blue-600/50 mb-4" />
+            <h2 className="text-xl font-semibold text-slate-700 mb-2">文档生成智能体</h2>
             <p className="text-slate-500 text-sm max-w-md mb-8">
               一句话生成 PPT / PDF / Word / Excel / 思维导图 · 可在工作台在线编辑
             </p>
@@ -1168,14 +1168,14 @@ export default function App({
                   key={i}
                   className={`group flex items-center gap-2 px-4 py-2.5 text-[13px] rounded-xl transition-colors text-left leading-snug ${
                     ex.demoFile
-                      ? 'text-amber-400/80 bg-amber-500/5 border border-amber-500/20 hover:bg-amber-500/10 hover:text-amber-300 hover:border-amber-500/30'
-                      : 'text-slate-400 bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700/60 hover:text-slate-300 hover:border-slate-600/60'
+                      ? 'text-amber-600/80 bg-amber-500/5 border border-amber-500/20 hover:bg-amber-500/10 hover:text-amber-700 hover:border-amber-500/30'
+                      : 'text-slate-600 bg-slate-100 border border-slate-200 hover:bg-slate-200 hover:text-slate-800 hover:border-slate-300'
                   }`}
                   onClick={() => handleClickExample(ex)}
                   disabled={isStreaming || uploading}
                 >
                   {ex.demoFile && (
-                    <FileText className="w-3.5 h-3.5 shrink-0 text-amber-400/60 group-hover:text-amber-400/80" />
+                    <FileText className="w-3.5 h-3.5 shrink-0 text-amber-600/60 group-hover:text-amber-600/80" />
                   )}
                   <span>{ex.question}</span>
                 </button>
@@ -1217,13 +1217,13 @@ export default function App({
             {uploadedFiles.map((f, i) => (
               <span
                 key={i}
-                className="inline-flex items-center gap-1 bg-slate-800 text-slate-300 px-2 py-1 rounded-lg text-[12px] border border-slate-700/50"
+                className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-1 rounded-lg text-[12px] border border-slate-200"
                 title={f.path}
               >
                 <Paperclip className="w-3 h-3 text-slate-500" />
                 {f.name} ({formatSize(f.size)})
                 <button
-                  className="text-slate-500 hover:text-red-400 ml-0.5"
+                  className="text-slate-500 hover:text-red-600 ml-0.5"
                   onClick={() => handleRemoveFile(f.name)}
                 >
                   <XCircle className="w-3 h-3" />
@@ -1231,7 +1231,7 @@ export default function App({
               </span>
             ))}
             <button
-              className="text-slate-500 hover:text-red-400 text-[12px] flex items-center gap-1 px-1.5"
+              className="text-slate-500 hover:text-red-600 text-[12px] flex items-center gap-1 px-1.5"
               onClick={handleClearFiles}
             >
               <Trash2 className="w-3 h-3" />
@@ -1250,7 +1250,7 @@ export default function App({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
       >
-        <div className="border-2 border-dashed border-blue-500/50 rounded-xl py-3 text-center text-[13px] text-blue-400 bg-blue-500/5 mb-2">
+        <div className="border-2 border-dashed border-blue-500/50 rounded-xl py-3 text-center text-[13px] text-blue-600 bg-blue-500/5 mb-2">
           {uploading ? '上传中...' : '松开鼠标上传文件'}
         </div>
       </div>
@@ -1258,8 +1258,8 @@ export default function App({
       {/* 文档上下文条：工作台打开某文件时显示，助手作用域绑定该文件 */}
       {openFile && (
         <div className="w-full max-w-4xl mx-auto px-4 pt-1">
-          <div className="flex items-center gap-1.5 text-[12px] text-blue-300/90 bg-blue-500/10 border border-blue-500/20 rounded-lg px-2.5 py-1.5">
-            <FileText className="w-3.5 h-3.5 shrink-0 text-blue-400/80" />
+          <div className="flex items-center gap-1.5 text-[12px] text-blue-700 bg-blue-500/10 border border-blue-500/20 rounded-lg px-2.5 py-1.5">
+            <FileText className="w-3.5 h-3.5 shrink-0 text-blue-600/80" />
             <span className="truncate">
               正在编辑 <span className="font-medium">{openFile.name}</span> · 可让我改其中某段/某图
             </span>
@@ -1276,7 +1276,7 @@ export default function App({
             value={style}
             onChange={(e) => setStyle(e.target.value)}
             title="PPT 模版风格"
-            className="shrink-0 bg-[#0b0f19] border border-slate-700/60 rounded-lg text-[12px] text-slate-300 outline-none py-1 px-2 max-w-[9rem] focus:border-slate-500/60"
+            className="shrink-0 bg-slate-50 border border-slate-300 rounded-lg text-[12px] text-slate-700 outline-none py-1 px-2 max-w-[9rem] focus:border-slate-500/60"
           >
             <option value="">不指定</option>
             {PPT_STYLES.map((s) => (
@@ -1285,15 +1285,15 @@ export default function App({
           </select>
         </div>
         <div
-          className={`bg-[#151b28] border rounded-2xl flex items-end p-2 transition-colors shadow-lg shadow-black/20 ${
-            isDragging ? 'border-blue-500/60' : 'border-slate-700/60 focus-within:border-slate-500/60'
+          className={`bg-white border rounded-2xl flex items-end p-2 transition-colors shadow-lg shadow-black/20 ${
+            isDragging ? 'border-blue-500/60' : 'border-slate-300 focus-within:border-slate-500/60'
           }`}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
         >
           <button
-            className="p-3 text-slate-400 hover:text-slate-300 hover:bg-slate-800/50 rounded-xl transition-colors mb-0.5"
+            className="p-3 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors mb-0.5"
             onClick={() => fileInputRef.current?.click()}
             title="上传文件"
           >
@@ -1323,7 +1323,7 @@ export default function App({
                   ? 'AI 正在思考...'
                   : '描述你想生成的内容，如：把季度业绩做成 Excel 表格'
             }
-            className="flex-1 bg-transparent text-[15px] text-slate-200 placeholder:text-slate-500 resize-none outline-none py-3 px-3 max-h-32 min-h-[44px] disabled:opacity-50"
+            className="flex-1 bg-transparent text-[15px] text-slate-800 placeholder:text-slate-500 resize-none outline-none py-3 px-3 max-h-32 min-h-[44px] disabled:opacity-50"
           />
           {isStreaming ? (
             <button

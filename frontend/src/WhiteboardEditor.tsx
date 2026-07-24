@@ -43,7 +43,7 @@ export default function WhiteboardEditor({ path, userId }: { path: string; userI
   );
 
   if (initial === undefined) {
-    return <div className="flex items-center justify-center h-full text-slate-600 text-sm">加载白板…</div>;
+    return <div className="flex items-center justify-center h-full text-slate-400 text-sm">加载白板…</div>;
   }
   return (
     <div className="h-full w-full">

@@ -13,24 +13,24 @@ function Shell() {
   const [reloadNonce, setReloadNonce] = useState(0);
 
   return (
-    <div className="flex flex-col h-screen bg-[#0a0e1a]">
+    <div className="flex flex-col h-screen bg-slate-50">
       {/* 统一顶栏：logo + 产品名 · 助手开关 + 用户 */}
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-800 bg-[#0d1220] flex-shrink-0">
-        <Sparkles size={18} className="text-blue-400" />
-        <span className="text-[15px] font-semibold text-slate-100">文档生成智能体</span>
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-200 bg-white flex-shrink-0">
+        <Sparkles size={18} className="text-blue-600" />
+        <span className="text-[15px] font-semibold text-slate-800">文档生成智能体</span>
         <div className="ml-auto flex items-center gap-3">
           <button
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[13px] text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[13px] text-slate-500 hover:bg-slate-100 hover:text-slate-700"
             onClick={() => setShowAssistant((s) => !s)}
             title={showAssistant ? '隐藏助手' : '显示助手'}
           >
             {showAssistant ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
             助手
           </button>
-          <div className="flex items-center gap-1.5 text-[12px] text-slate-500">
+          <div className="flex items-center gap-1.5 text-[12px] text-slate-400">
             <User size={14} />
             <input
-              className="bg-slate-800/60 border border-slate-700 rounded px-2 py-0.5 text-slate-300 w-28 outline-none focus:border-blue-500"
+              className="bg-slate-100 border border-slate-300 rounded px-2 py-0.5 text-slate-700 w-28 outline-none focus:border-blue-500"
               value={userId}
               onChange={(e) => setUserId(e.target.value || 'default_user')}
             />
@@ -44,7 +44,7 @@ function Shell() {
           <Workspace userId={userId} onOpenFile={setOpenFile} reloadNonce={reloadNonce} />
         </div>
         {showAssistant && (
-          <aside className="w-[420px] flex-shrink-0 border-l border-slate-800 min-h-0">
+          <aside className="w-[420px] flex-shrink-0 border-l border-slate-200 min-h-0">
             <App
               userId={userId}
               hideHeader

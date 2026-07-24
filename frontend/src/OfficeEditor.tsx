@@ -73,7 +73,7 @@ export default function OfficeEditor({ path, userId, name }: { path: string; use
         <a
           href={fileRawUrl(path, userId)}
           download={name}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm"
+          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
         >
           <Download size={15} /> 下载 {name}
         </a>
