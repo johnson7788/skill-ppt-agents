@@ -36,6 +36,7 @@ echo -e "${GREEN}  启动科研助手${NC}"
 echo -e "${GREEN}========================================${NC}"
 
 # 清理上一代残留的孤儿沙箱容器（内存态 pool 重启后无法接管，起新的前先清）
+echo -e "${GREEN}  清理上一代残留的孤儿沙箱容器"
 docker rm -f $(docker ps -aq --filter "name=sandbox-") 2>/dev/null || true
 
 # 启动后端
