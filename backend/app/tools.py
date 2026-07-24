@@ -383,6 +383,72 @@ def sync_upload_to_sandbox(
 
 
 # ---------------------------------------------------------------------------
+# sync_sandbox_to_workspace — 把沙箱内产物拉回用户「工作台」（uploads/<user_id>/）
+# ---------------------------------------------------------------------------
+_SANDBOX_PULL_MAX_BYTES = 50 * 1024 * 1024  # 50MB，容纳 PPTX/PDF 等二进制产物
+
+
+def sync_sandbox_to_workspace(
+    sandbox_path: str,
+    tool_context: ToolContext,
+    filename: str | None = None,
+) -> dict:
+    """把沙箱内生成的文件（如 dashi-ppt 导出的 .pptx/.pdf）拉回用户「工作台」。
+
+    dashi-ppt 等技能在沙箱内运行，产物落在沙箱里（如 /app/output/x.pptx）。
+    用本工具把二进制产物同步回本地 uploads/<user_id>/，用户即可在工作台查看/编辑/下载。
+
+    参数：
+    - sandbox_path: 沙箱内的源文件绝对路径（如 "/app/output/大语言模型发展脉络.pptx"）。
+    - filename: 保存到工作台的文件名（默认取 sandbox_path 的文件名）。
+
+    返回 {"success", "path", "download_url"} 或 {"error"}。
+    保存后请把 download_url 以 markdown 链接给用户，并提示可在工作台打开编辑。
+    """
+    from app import sandbox as sbx
+
+    if not sbx.enabled():
+        return {"error": "沙箱未启用，无法从沙箱同步文件"}
+
+    if not sandbox_path or not sandbox_path.strip():
+        return {"error": "sandbox_path 不能为空"}
+
+    user_id = str(tool_context.state.get("_sbkey") or tool_context.user_id or "default")
+    user_dir = UPLOADS_DIR / user_id
+    user_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_name = pathlib.Path(filename or sandbox_path).name
+    if not safe_name:
+        return {"error": "无法确定目标文件名"}
+
+    target = (user_dir / safe_name).resolve()
+    if not str(target).startswith(str(user_dir.resolve()) + os.sep):
+        return {"error": "权限拒绝：非法的目标文件名"}
+
+    try:
+        data = sbx.read_file_sync(user_id, sandbox_path.strip())
+    except Exception as e:
+        return {"error": f"从沙箱读取文件失败: {e}"}
+
+    if len(data) > _SANDBOX_PULL_MAX_BYTES:
+        return {"error": f"文件过大（{len(data)} 字节），超过 {_SANDBOX_PULL_MAX_BYTES} 上限"}
+
+    from urllib.parse import quote
+
+    try:
+        target.write_bytes(data)
+    except Exception as e:
+        return {"error": f"写入工作台失败: {e}"}
+
+    return {
+        "success": True,
+        "path": safe_name,
+        "size": len(data),
+        "download_url": f"/download?user_id={quote(user_id)}&file={quote(safe_name)}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # generate_ppt — 图片型 PPT 生成（qwen-image 逐页出图 + python-pptx 组装）
 # ---------------------------------------------------------------------------
 # 每页是一整张 16:9 生成图，最后组装成 .pptx。图片后端用阿里 DashScope

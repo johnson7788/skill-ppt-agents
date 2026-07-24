@@ -155,6 +155,11 @@ class SandboxManager:
         sandbox = await self._get(key)
         await sandbox.files.write_file(path, data, mode=mode)
 
+    async def read_file(self, key: str, path: str) -> bytes:
+        """从租户沙箱内读取文件（二进制）。"""
+        sandbox = await self._get(key)
+        return await sandbox.files.read_bytes(path)
+
     async def run(self, key: str, command: str, timeout: int = 60) -> dict:
         """在租户沙箱内执行命令，返回 {stdout, stderr, returncode}。"""
         from opensandbox.models.execd import RunCommandOpts
@@ -260,6 +265,11 @@ def run_sync(key: str, command: str, timeout: int = 60) -> dict:
 async def write_file_async(key: str, path: str, data: str | bytes, mode: int = 644) -> None:
     """异步侧入口：向租户沙箱写入文件。"""
     await asyncio.wrap_future(_submit(manager.write_file(key, path, data, mode)))
+
+
+def read_file_sync(key: str, path: str, timeout: int = 60) -> bytes:
+    """同步从沙箱读取文件（二进制）。"""
+    return _submit(manager.read_file(key, path)).result(timeout=timeout)
 
 
 def write_file_sync(key: str, path: str, data: str | bytes, mode: int = 644) -> None:

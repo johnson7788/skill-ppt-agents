@@ -169,7 +169,7 @@
 
 ### 关键设计
 
-- **文档空间 = 本地 `backend/uploads/<user_id>/`**，不是沙箱。因为 `generate_ppt`/dashi-ppt 产物写本地、`/download` 也从本地读；沙箱只用于代码执行。文件树 / Excalidraw / ONLYOFFICE 都操作这个本地目录。
+- **文档空间 = 本地 `backend/uploads/<user_id>/`**，不是沙箱。`generate_ppt` 直接写本地、`/download` 也从本地读；沙箱只用于代码执行。dashi-ppt 在沙箱内导出 `.pptx/.pdf`，再由 `sync_sandbox_to_workspace` 拉回本地目录。文件树 / Excalidraw / ONLYOFFICE 都操作这个本地目录。
 - **路径安全**：所有 `/files/*`、`/office/*` 端点按 `user_id` 定位目录，路径 `resolve()` + `startswith` 规范化，挡住 `../` 越权（`server.py:_safe_user_path`）。
 
 ### ONLYOFFICE 网关（doc/xls/ppt/pdf）
@@ -193,7 +193,7 @@ DocumentServer 是独立容器，只认 HTTP URL，而文件在本地，所以�
 
 ### 与 Skills 的联动
 
-- **正向**：Agent 用 `save_to_workspace`（文本产物）或 `generate_ppt`（PPT）把文件写进 uploads → 文件树出现 → 点开即用对应编辑器改。
+- **正向**：Agent 用 `save_to_workspace`（文本产物）、`generate_ppt`（图片型 PPT）或 `sync_sandbox_to_workspace`（把 dashi-ppt 在沙箱导出的 `.pptx/.pdf` 拉回）把文件写进 uploads → 文件树出现 → 点开即用对应编辑器改。
 - **反向**：编辑器里改完存回 uploads → 用户可让 Agent「基于我刚改的 X.pptx 继续…」，Agent 读同一份文件。
 
 ---
@@ -206,6 +206,8 @@ DocumentServer 是独立容器，只认 HTTP URL，而文件在本地，所以�
 |------|------|------|
 | `generate_ppt` | PPT 生成 | 图片型 PPT：模型规划提纲并为每页写出图提示词 → qwen-image 逐页出图 → python-pptx 组装 16:9 `.pptx`，返回下载链接。支持 12 种预设风格（科研答辩风、麦肯锡风格、党政红等） |
 | `save_to_workspace` | 产物落地 | 把文本交付物（Markdown/CSV/JSON/HTML/SVG/思维导图 .md）写进工作台 `uploads/<user_id>/`，自动进文件树可编辑（5MB 上限，`../` 越权拦截） |
+| `sync_sandbox_to_workspace` | 沙箱→工作台 | 把沙箱内生成的二进制产物（如 dashi-ppt 导出的 `.pptx/.pdf`）拉回本地 `uploads/<user_id>/`，返回下载链接（50MB 上限，`../` 越权拦截） |
+| `sync_upload_to_sandbox` | 工作台→沙箱 | 把用户已上传的文件同步进沙箱，供 `terminal` 在沙箱内处理 |
 | `todo` | 任务规划 | 拆解复杂任务为待办清单并跟踪进度，状态存于会话 state（单轮会话内有效） |
 | `terminal` | 终端执行 | `subprocess` 执行 shell 命令，返回 stdout/stderr/returncode（高权限，请在受信部署边界内使用） |
 | `execute_code` | 代码执行 | Google ADK 内置 `UnsafeLocalCodeExecutor`，自动编写并运行 Python 代码处理数据/计算 |
@@ -272,7 +274,7 @@ Agent 规划提纲，为每页写英文出图 prompt + 中文演讲备注
 
 ### 设计要点
 
-- **出图在后端本地跑**，不进沙箱——沙箱镜像没有 `python-pptx`，也没有把产物拉回宿主机的通道
+- **出图在后端本地跑**，不进沙箱——沙箱镜像没有 `python-pptx`。（若确需沙箱产物落地，可用 `sync_sandbox_to_workspace` 拉回，dashi-ppt 走这条路）
 - **qwen-image 无负向提示词**：写"不要浏览器"反而会把浏览器画出来，所以只写正向约束
 - **页数上限 20 页**，避免生成时间过长
 
@@ -301,7 +303,7 @@ Agent 规划提纲，为每页写英文出图 prompt + 中文演讲备注
 # 2. 启动 OpenSandbox 服务端（保持运行，幂等——已在 :8080 运行则自动跳过）
 ./start_sandbox.sh
 
-# 3. 在 backend/.env 中确认已开启（prepare 后默认即为下列值）
+# 3. 在根目录 .env 中确认已开启（prepare 后默认即为下列值）
 #    SANDBOX_ENABLED=true
 #    SANDBOX_IMAGE=my-sandbox:latest
 
@@ -403,9 +405,9 @@ uv sync
 cd ../frontend
 npm install
 
-# 3. 配置环境变量
-cp backend/env_example backend/.env
-# 编辑 backend/.env，填入 DEEPSEEK_API_KEY
+# 3. 配置环境变量（单一根目录 .env）
+cp env_example .env
+# 编辑 .env，填入 DEEPSEEK_API_KEY
 
 # 4. 一键启动（后端 :8585 + 前端 :3585）
 ./start.sh
