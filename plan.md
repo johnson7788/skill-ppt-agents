@@ -135,4 +135,6 @@ DocServer 与后端要能互相通过内网 URL 访问（compose 同网络即可
    - 前端 `OfficeEditor.tsx` 加载 api.js 嵌 DocEditor；未配置时回退下载。pdf 也走 ONLYOFFICE。
    - env：`OFFICE_JWT_SECRET/OFFICE_PORT/OFFICE_DOCSERVER_URL/OFFICE_BACKEND_URL`。
    - 端到端验证：`docker compose up -d documentserver` 后，工作台打开 .docx/.pptx 编辑保存回写。
-4. **P3 Skills 联动**：验证 Agent 产物在编辑器里可编辑、可回喂；按需加 docx/xlsx/mindmap skill。
+4. **P3 Skills 联动** ✅：加 `save_to_workspace` 工具（app/tools.py），Agent 把 Markdown/CSV/JSON/HTML/SVG/mindmap(.md) 等文本产物写进本地 `uploads/<user_id>/`，
+   自动出现在工作台文件树，点开即用 ONLYOFFICE/Excalidraw 编辑。已注册进 agent.py，instruction.md 加说明，server.py 加友好名。
+   PPT 仍走 `generate_ppt`。docx/xlsx（需 python-docx/openpyxl）、mermaid→excalidraw 思维导图 skill 按需再加。

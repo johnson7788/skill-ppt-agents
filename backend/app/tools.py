@@ -244,6 +244,59 @@ def upload_to_sandbox(
 
 
 # ---------------------------------------------------------------------------
+# save_to_workspace — 把产物写入用户文档空间（uploads/<user_id>/），供工作台编辑
+# ---------------------------------------------------------------------------
+_WS_MAX_BYTES = 5 * 1024 * 1024  # 单文件 5MB 上限
+
+
+def save_to_workspace(
+    filename: str,
+    content: str,
+    tool_context: ToolContext,
+    description: str = "",
+) -> dict:
+    """把文本内容保存为用户文档空间里的文件，用户可在「工作台」直接查看/编辑。
+
+    适用于把你产出的交付物落地成文件：Markdown 笔记、CSV/JSON 数据、HTML 报告、
+    SVG 图，或思维导图（写成含 mermaid 代码块的 .md，用户可在白板里导入）。
+    保存后文件会出现在工作台文件树：.md/.csv/.json/.html/图片可预览，
+    .docx/.xlsx/.pptx 用 ONLYOFFICE 编辑，.excalidraw 用白板编辑。
+
+    参数：
+    - filename: 文件名，可含子目录（如 "notes/summary.md"）；后缀决定用哪个编辑器。
+    - content: 文件文本内容。
+    - description: 操作目的（展示用）。
+
+    返回 {"success", "path", "download_url"}；失败返回 {"error"}。
+    保存后请把 download_url 以 markdown 链接给用户，并提示可在工作台打开编辑。
+    """
+    if not filename or not filename.strip():
+        return {"error": "filename 不能为空"}
+    if len(content.encode("utf-8")) > _WS_MAX_BYTES:
+        return {"error": "内容过大（>5MB）"}
+
+    user_id = str(tool_context.state.get("_sbkey") or tool_context.user_id or "default_user")
+    root = (UPLOADS_DIR / user_id).resolve()
+    target = (root / filename.lstrip("/")).resolve()
+    if target != root and not str(target).startswith(str(root) + os.sep):
+        return {"error": "非法路径"}
+
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+    except OSError as e:
+        return {"error": f"写入失败: {e}"}
+
+    from urllib.parse import quote
+    rel = str(target.relative_to(root))
+    return {
+        "success": True,
+        "path": rel,
+        "download_url": f"/download?user_id={quote(user_id)}&file={quote(target.name)}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # ensure_sandbox_skills — 同步指定 skill 脚本到沙箱
 # ---------------------------------------------------------------------------
 def ensure_sandbox_skills(skill_name: str, tool_context: ToolContext) -> dict:

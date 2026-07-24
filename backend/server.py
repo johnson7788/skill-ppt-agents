@@ -409,6 +409,7 @@ def _friendly_tool_name(raw: str) -> str:
         "list_skills": "查看可用技能",
         "load_skill_resource": "加载参考资料",
         "generate_ppt": "生成 PPT",
+        "save_to_workspace": "保存到工作台",
     }
     return mapping.get(raw, raw)
 
