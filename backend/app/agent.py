@@ -86,6 +86,11 @@ ppt_deck_skill = load_skill_from_dir(
     SKILLS_DIR / "ppt-deck"
 )
 
+# Skill 4: 可编辑型 PPT 生成 — HTML 模板编排 + 可编辑 PPTX/PDF 导出
+dashi_ppt_skill = load_skill_from_dir(
+    SKILLS_DIR / "dashi-ppt"
+)
+
 # ---------------------------------------------------------------------------
 # SkillToolset — 自动生成 list_skills, load_skill, load_skill_resource, run_skill_script
 # ---------------------------------------------------------------------------
@@ -94,6 +99,7 @@ skill_toolset = SkillToolset(
         arxiv_paper_search_skill,
         bing_search_skill,
         ppt_deck_skill,
+        dashi_ppt_skill,
     ]
 )
 
