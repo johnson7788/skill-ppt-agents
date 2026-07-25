@@ -17,11 +17,11 @@
   </style>
 </head>
 <body>
-  <div class="label">选中的文本</div>
-  <div id="sel">（打开插件时未选中文本）</div>
-  <div class="label">改写指令</div>
-  <textarea id="inst" placeholder="例如：改得更正式；缩短一半；翻译成英文"></textarea>
-  <button id="go">改写并替换选区</button>
+  <div class="label">选中的文本（可选）</div>
+  <div id="sel">（未选中，可做整篇/整页操作）</div>
+  <div class="label">编辑指令</div>
+  <textarea id="inst" placeholder="选中文字：改得更正式 / 缩短一半&#10;不选：把第一页背景改成浅黄色 / 把全文的旧词替换成新词"></textarea>
+  <button id="go">执行</button>
   <div id="status"></div>
   <script type="text/javascript" src="code.js"></script>
 </body>

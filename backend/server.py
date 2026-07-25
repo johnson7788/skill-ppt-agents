@@ -772,38 +772,44 @@ async def office_callback(request: Request, token: str = ""):
 
 
 class OfficeEditIn(BaseModel):
-    text: str
+    text: str = ""          # 当前选区文本（无选区时为空，做全文级操作）
     instruction: str
+    doc_type: str = "slide"  # word / cell / slide，供 LLM 判断可用操作
 
 
 @app.post("/office/edit")
 async def office_edit(body: OfficeEditIn):
-    """ONLYOFFICE 插件的选区改写：收选区文本+指令 → LLM 改写 → 只回改写后文本（插件负责写回选区）。"""
+    """ONLYOFFICE 插件的编辑意图解析：收选区文本+指令 → LLM 产【结构化 op】→ 插件在编辑器里执行。
+
+    见 docs/plan.md §4：AI 不改文件，只产"要在编辑器里做的操作"，回写由插件 Builder API 在 live 会话里完成。
+    """
+    from app.office_ops import SYSTEM_PROMPT, parse_office_op
+
     text = (body.text or "").strip()
     instruction = (body.instruction or "").strip()
-    if not text or not instruction:
-        return JSONResponse({"error": "缺少 text 或 instruction"}, status_code=400)
+    if not instruction:
+        return JSONResponse({"error": "缺少 instruction"}, status_code=400)
 
     import litellm
     from app.agent import MODEL_PROVIDER, MODEL_NAME
     model = MODEL_NAME if "/" in MODEL_NAME else f"{MODEL_PROVIDER}/{MODEL_NAME}"
+    user_msg = f"文档类型：{body.doc_type}\n选中文本：{text or '（无）'}\n指令：{instruction}"
     try:
         resp = await litellm.acompletion(
             model=model,
             api_key=os.environ.get("DEEPSEEK_API_KEY"),
             messages=[
-                {"role": "system", "content":
-                    "你是文档改写助手。根据用户指令改写给定文本，只输出改写后的正文，"
-                    "不要加解释、不要加引号、不要加markdown标记。"},
-                {"role": "user", "content": f"指令：{instruction}\n\n原文：\n{text}"},
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_msg},
             ],
-            temperature=0.3,
+            temperature=0.1,
         )
-        out = resp["choices"][0]["message"]["content"].strip()
+        raw = resp["choices"][0]["message"]["content"].strip()
+        op = parse_office_op(raw)
     except Exception as e:
-        logger.error("office_edit 改写失败: %s", e)
+        logger.error("office_edit 解析失败: %s", e)
         return JSONResponse({"error": str(e)}, status_code=500)
-    return JSONResponse({"text": out})
+    return JSONResponse({"op": op})
 
 
 # ---------------------------------------------------------------------------

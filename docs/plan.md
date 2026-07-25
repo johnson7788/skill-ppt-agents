@@ -52,15 +52,119 @@ office 用插件 `GetSelectedText`/`GetSelectedContent`；白板用 `appState.se
 ① 所见即所得、无需重挂刷新；② 不与 DocServer 抢写、不会被回写覆盖；③ Builder API 是高层语义（"设置第 1 页背景色"），不碰易被遮罩的原始 XML。
 这同时解决了三宗罪，且**选区级和全文级用同一套插件机制**。
 
-## 4. 分期落地
+## 4. 「所见即所得编辑」到底怎么实现（机制详解）
+
+### 4.1 一句话原理
+
+**AI 不写文件，AI 写"要在编辑器里执行的操作"。** office 编辑器（ONLYOFFICE）里跑着一个文档模型（sdkjs 引擎），
+用户手打字、改颜色，本质都是往这个内存模型发指令、引擎立即重绘、再由编辑器负责落盘。
+我们的插件能往**同一个模型**发同样的指令——所以"AI 编辑"= AI 产出一段指令 → 插件在 live 会话里执行 →
+**跟用户亲手改一模一样**：立即渲染、无需重挂刷新、由编辑器 autosave 落盘（不存在后端偷改磁盘导致的抢写/遮罩问题）。
+
+对比现在的坏做法：后端 python-pptx 改的是**磁盘上的原始 XML**，绕过引擎，所以要重挂刷新、会被 live 会话覆盖、还可能被模板封面图遮住。
+
+### 4.2 三层 iframe：谁能调谁
+
+```
+宿主页(3585)  ── 助手侧栏 App.tsx、文件树 ────────────────┐
+  └─ <iframe> ONLYOFFICE 编辑器(DocServer:8081) ───────┐  │  宿主页 ✗直接调 编辑器内部
+        └─ <iframe> 插件面板 index.html + code.js ──┐  │  │  插件 ✓调 编辑器(同源 Asc API)
+                                                    ▼  ▼  ▼
+                               插件用 window.Asc.plugin.* 操作文档
+```
+
+关键：**只有插件 iframe 能通过 `window.Asc.plugin` 调编辑器**。宿主页的助手侧栏够不到编辑器内部（跨源/跨层）——
+所以助手要驱动编辑，得经一座"桥"（见 4.6）。
+
+### 4.3 两个原语（插件能做的两类操作）
+
+| 操作 | API | 用途 |
+|------|-----|------|
+| **读选区** | `Asc.plugin.executeMethod("GetSelectedText", [], cb)` | 场景 3：拿用户选中的文字 |
+| **写选区** | `Asc.plugin.executeMethod("PasteText", [新文本])` | 场景 3：把改写结果替换进选区 |
+| **全文操作** | `Asc.plugin.callCommand(function(){ /* Builder API */ }, false)` | 场景 2：改背景、批量替换、插入等**任意文档级**操作 |
+
+`callCommand` 是核心：它把你传的**函数序列化**丢给引擎，在文档模型里执行 Builder API（`Api.*`）。
+官方免费的 AI 插件（`sdkjs-plugins/content/ai`）就是靠它改幻灯片，证明社区版可用。
+
+### 4.4 端到端数据流 · 场景 2（未选中，改第 1 页背景为浅黄）
+
+```
+用户在助手侧栏说"把第1页背景改成浅黄"
+  → 助手把指令 + 文档类型(slide) 发给后端 /office/edit
+  → 后端 LLM 产出【结构化操作】: {op:"set_slide_background", slide:0, color:"#FFFACD"}
+  → 插件收到该 op，翻译成 Builder 代码并执行：
+      Asc.plugin.callCommand(function(){
+        var oPresentation = Api.GetPresentation();
+        var oSlide = oPresentation.GetSlideByIndex(0);
+        var oFill  = Api.CreateSolidFill(Api.CreateRGBColor(0xFF, 0xFA, 0xCD));
+        oSlide.SetBackground(oFill);
+      }, false);
+  → 引擎立即重绘第1页（用户当场看到变黄）→ autosave/forcesave 触发 P2 callback → 写回 uploads
+```
+
+（API 名以官方 Presentation Builder 文档为准：`Api.GetPresentation` / `GetSlideByIndex` / `CreateSolidFill` /
+`CreateRGBColor` / `SetBackground`，POC 时核对签名。）
+
+### 4.5 端到端数据流 · 场景 3（选中一段文字，改写它）
+
+```
+用户选中一段 → 插件 GetSelectedText 拿到原文 → 连同用户指令发 /office/edit
+  → 后端 LLM 只产【改写后的文本】
+  → 插件 executeMethod("PasteText", [新文本]) 替换选区
+  → 引擎重绘 → autosave → P2 callback 落盘
+```
+
+比场景 2 简单：不需要 Builder API，就是"读选区文本→LLM 改写→写回选区"。
+
+### 4.6 LLM 到底产什么（可靠性关键）
+
+两种契约，**先窄后宽**：
+
+- **A. 受限结构化指令集（推荐先做）**：LLM 只能产预定义的 op（JSON），插件端有一张"op→Builder 代码"翻译表。
+  覆盖高频操作即可：
+  | op | 参数 | 插件翻译成 |
+  |----|------|-----------|
+  | `set_slide_background` | slide, color | `GetSlideByIndex().SetBackground(CreateSolidFill(...))` |
+  | `replace_text` | find, replace, scope | 遍历 range 替换 |
+  | `rewrite_selection` | text | `PasteText([text])` |
+  | `insert_text` | slide/pos, text | Builder 插入 |
+  这样 LLM 出错空间小、可校验，最稳。**覆盖不够再加 op。**
+- **B. 直接产 Builder JS（放开，后期）**：LLM 直接写 `callCommand` 里那段函数体。灵活但易错、有安全面（执行任意 JS），
+  要沙箱化/白名单。**非必要不做。**
+
+### 4.7 助手侧栏怎么驱动插件（桥接）
+
+宿主页助手 ✗ 直接够不到插件 iframe。三种接法，按代价选：
+
+1. **插件自带面板（P6.1 先用）**：用户在**编辑器里的插件小面板**输入指令，插件直接 fetch 后端。最省事，先跑通链路。
+2. **后端当信箱 broker（P6.3 统一体验）**：助手侧栏 `POST /office/edit` 写入"待执行指令"；插件用 SSE/轮询
+   `GET /office/pending?doc=` 取指令并 `callCommand` 执行。宿主页和插件不直接通信，各自只跟后端说话，绕开跨 iframe 限制。
+3. postMessage 直连：受 iframe 嵌套+源限制，脆，不推荐。
+
+### 4.8 白板（Excalidraw）是同一原理的简化版
+
+白板编辑器就是**宿主页里的一个 React 组件**，没有 iframe 桥问题——助手能拿到 `excalidrawAPI` 引用直接调：
+
+- 场景 3：`getSceneElements()` + `appState.selectedElementIds` 读选区 → LLM 产新 elements → `updateScene({elements})` 局部替换。
+- 场景 2：`updateScene` 整体替换（当前"整图重画"够用时保留）。
+- 落盘：现有防抖 `PUT /files/raw`。
+
+所以白板可以**先落地**验证"选区→对话→回写"闭环，再把同一套上下文/驱动逻辑套到 office 插件上。
+
+## 5. 分期落地
 
 - **P6.0 止血（已做）**：office 覆盖后 `onDocChanged` 触发编辑器重挂重读（`App.tsx` 不再只对白板触发）；instruction.md 加"下载链接铁律"防臆造 host。—— 治标，不改回写通道。
-- **P6.1 office 选区编辑走插件**：完成 `完成.md §10.4` 的插件 POC（P-a 写回验证 → P-b 接 LLM），覆盖**场景 3 / office**。这是最优先，因为它验证"插件 `callCommand`/`PasteText` 在社区版 docker 上真能写回"这个唯一没把握的点。
-- **P6.2 office 全文编辑走插件**：给插件加"全文指令"通道，用 `callCommand` + Builder API 覆盖**场景 2 / office**（改背景、批量替换等）。**弃用后端 python-pptx 覆盖整文件那条路。**
+- **P6.1 office 选区编辑走插件（代码已就绪，待 docker POC）**：插件 `code.js` 读选区 → `PasteText` 写回，覆盖**场景 3 / office**。验证"插件 `PasteText` 在社区版 docker 上真能写回"（`完成.md §10.4` P-a/P-b）。
+- **P6.2 office 全文编辑走插件（代码已就绪 2026-07，待 docker POC）**：已落地**受限结构化 op**通道——
+  - 后端 `POST /office/edit {text,instruction,doc_type}` → LLM 产**一个** op JSON → `app/office_ops.py:parse_office_op` 校验 → 回 `{op}`（纯函数带自检：`python app/office_ops.py`）。
+  - 插件 `code.js:applyOp(op)`：`replace_selection`→`PasteText`；`set_slide_background`/`replace_text`→`callCommand`（Builder API，参数经 `Asc.scope` 传入）。
+  - v1 op：`replace_selection` / `set_slide_background{slide,color}` / `replace_text{find,replace}`。**改背景走这条**，弃用后端 python-pptx。
+  - **待 POC 核对**：① `Api.GetPresentation().GetSlideByIndex().SetBackground()` 与 `Asc.scope` 传参在本容器构建上生效；② `SearchAndReplace` 签名（仅 word）；③ callCommand 后 forcesave→P2 callback 落盘。
 - **P6.3 上下文注入统一**：前端按 3 场景规范化 docHint / 选区打包；office 与白板共用右侧同一个助手侧栏（跨 iframe `postMessage` 桥），不再各用一套面板。
 - **P6.4 图片重绘**（依赖 image skill，最后做）。
 
-## 5. 风险 / 待定
+## 6. 风险 / 待定
 
 - **LLM 产 Builder API JS 的可靠性未知**（P6.2）→ 先用**受限结构化指令集**（`set_background`/`replace_text`/`insert_text`/`format`，LLM 出 JSON intent，插件翻译成 `callCommand`），覆盖不足再放开生成任意 JS。先窄后宽。
 - 插件 `callCommand`/`PasteText` 写回**必须先在本项目的社区版 documentserver docker 上 POC 实测**（`完成.md §10.4` 待确认 4 项）。
