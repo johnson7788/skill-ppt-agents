@@ -102,3 +102,10 @@ backend/uploads
 backend/rag_storage/
 backend/rag_output/
 manage_backend/data/
+
+# ONLYOFFICE 容器运行时 gzip 的插件资源
+backend/office_plugin/**/*.gz
+# Playwright 测试产物
+frontend/test-results/
+frontend/playwright-report/
+frontend/tests/*.png
