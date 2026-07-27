@@ -307,15 +307,24 @@ def enqueue_office_op(
     find: str = "",
     replace: str = "",
     text: str = "",
+    cell: str = "",
+    value: str = "",
+    shape: int = 0,
 ) -> dict:
     """修改用户当前在工作台打开的 office 文档（.docx/.xlsx/.pptx）时**必须用本工具**，
     不要用 terminal + python-pptx/python-docx/openpyxl 去重写文件——那样会与编辑器 live 会话抢写、
     不刷新、易被模板遮挡。本工具把一个编辑操作投递给 ONLYOFFICE 编辑器，在 live 会话里所见即所得地落地。
 
-    op_type 取值及所需参数：
-    - "set_slide_background"（仅 pptx 改某页背景色）：slide=页码（从 0 开始，第一页=0），color="#RRGGBB"
-    - "replace_text"（全文查找替换）：find="原词"，replace="新词"
-    - "replace_selection"（用新文本替换用户当前选中的文本）：text="改写后的完整文本"
+    op_type 取值及所需参数（按目标编辑器类型选，用文件后缀判断当前打开的是哪种）：
+    - pptx：
+      - "set_slide_background"（改某页背景色）：slide=页码（从 0 开始，第一页=0），color="#RRGGBB"
+      - "set_slide_text"（改某页某个形状的文字）：slide=页码，shape=形状序号（从 0 开始，通常 0=标题），text="新文字"
+    - xlsx：
+      - "set_cell"（给单元格/区域填值）：cell="B2" 或 "A1:C3"，value="要填的内容"（数字也用字符串，如 "42"）
+    - docx：
+      - "replace_text"（全文查找替换）：find="原词"，replace="新词"
+    - 通用：
+      - "replace_selection"（用新文本替换用户当前选中的文本）：text="改写后的完整文本"
 
     每次只投递一个操作；需要多处改动就多次调用。
     返回 {"success": True, "op": {...}}；参数非法返回 {"error"}。
@@ -328,6 +337,10 @@ def enqueue_office_op(
     op = {"type": op_type}
     if op_type == "set_slide_background":
         op.update(slide=slide, color=color)
+    elif op_type == "set_slide_text":
+        op.update(slide=slide, shape=shape, text=text)
+    elif op_type == "set_cell":
+        op.update(cell=cell, value=value)
     elif op_type == "replace_text":
         op.update(find=find, replace=replace)
     elif op_type == "replace_selection":

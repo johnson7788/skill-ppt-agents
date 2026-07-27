@@ -13,9 +13,13 @@
     return info.userId || "default_user";
   }
 
+  // 后台没有选区上下文，只处理「整页/整篇/按坐标寻址」的 callCommand 类 op。
+  var CALLCMD_OPS = {
+    set_slide_background: 1, set_slide_text: 1, set_cell: 1, replace_text: 1,
+  };
+
   function applyOp(op) {
-    // 后台没有选区上下文，只处理整页/整篇的 callCommand 类 op（背景/查找替换）。
-    if (op.type !== "set_slide_background" && op.type !== "replace_text") return;
+    if (!CALLCMD_OPS[op.type]) return;
     console.log("[ai-bridge] applyOp " + JSON.stringify(op));
     window.Asc.scope = window.Asc.scope || {};
     window.Asc.scope.op = op;
@@ -28,6 +32,23 @@
             b = parseInt(c.substr(5, 2), 16);
         var oSlide = Api.GetPresentation().GetSlideByIndex(op.slide);
         if (oSlide) oSlide.SetBackground(Api.CreateSolidFill(Api.CreateRGBColor(r, g, b)));
+      } else if (op.type === "set_slide_text") {
+        // 改第 slide 页第 shape 个形状的文字：清空其内容再塞一段新文本
+        var oSlide2 = Api.GetPresentation().GetSlideByIndex(op.slide);
+        if (oSlide2) {
+          var shapes = oSlide2.GetAllShapes();
+          var sh = shapes[op.shape];
+          if (sh && sh.GetDocContent) {
+            var oContent = sh.GetDocContent();
+            oContent.RemoveAllElements();
+            var oP = Api.CreateParagraph();
+            oP.AddText(op.text);
+            oContent.Push(oP);
+          }
+        }
+      } else if (op.type === "set_cell") {
+        // 给单元格/区域填值（value 恒为字符串，数字/公式由引擎按格式解析）
+        Api.GetActiveSheet().GetRange(op.cell).SetValue(op.value);
       } else if (op.type === "replace_text") {
         Api.GetDocument().SearchAndReplace({ searchString: op.find, replaceString: op.replace });
       }
