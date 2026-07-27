@@ -1,11 +1,12 @@
 # 在线办公 + Skills 智能体
 
-一个把**对话式智能体**与**在线办公工作台**合到一起的应用：左边是能查论文、搜网页、生成 PPT、读文件的多技能 Agent，右边是一个「工作台」——文件树 + **ONLYOFFICE 在线编辑 doc/xls/ppt/pdf** + **Excalidraw 白板/思维导图**。智能体产出的文档（PPT、Markdown、CSV、思维导图……）直接落进工作台，点开即可在浏览器里二次编辑，改完还能回喂给 Agent 继续处理。
+一个把**对话式智能体**与**在线办公工作台**合到一起的应用：左边是能查论文、搜网页、生成 PPT、读文件的多技能 Agent，右边是一个「工作台」——文件树 + **ONLYOFFICE 在线编辑 doc/xls/ppt/pdf** + **Excalidraw 白板/思维导图**。智能体产出的文档（PPT、Markdown、CSV、思维导图……）直接落进工作台，点开即可在浏览器里二次编辑；更进一步，**你可以一边开着 PPT/文档，一边在侧栏用一句话让 AI 直接改它**——「把第一页背景改成红色」「把全文的『方案 A』替换成『方案 B』」，改动**实时落到你正在编辑的那份文档里**，所见即所得。这就是 **Online AI Office**。
 
-**两条主线：**
+**三条主线：**
 
 - **Skills 智能体**（基于 Google ADK + DeepSeek）：图片型 PPT 生成（12 种预设风格）、可编辑型 PPT、arXiv 论文检索、网页搜索、文件上传问答，内置任务规划、终端/代码执行、图片分析（OCR）、人在回路澄清；通过**旁路解说架构**把工具调用与思考翻译成通俗中文卡片。
 - **在线办公工作台**：每个用户一个文档空间（`backend/uploads/<user_id>/`），文件树浏览 + 预览，`.docx/.xlsx/.pptx/.pdf` 走 ONLYOFFICE 在线编辑（文字可选中可改），`.excalidraw` 走白板，Agent 产物用 `save_to_workspace` 落地成可编辑文件。
+- **Online AI Office（对话式改文档）**：侧栏对话直接驱动 ONLYOFFICE。你说「改背景 / 替换文字」→ Agent 调 `enqueue_office_op` 生成一个受限结构化编辑指令 → 后端信箱 → 编辑器里常驻的后台插件轮询取走，用 ONLYOFFICE Builder API（`callCommand`）落到 live 会话——**不重写文件、不刷新页面、改动即时可见**。社区版免费，无需付费 Connector。
 
 > 目录/集成设计见 [`plan.md`](plan.md)（P0 文件底座 → P1 Excalidraw → P2 ONLYOFFICE → P3 Skills 联动，均已实现并端到端验证）。
 
@@ -17,6 +18,7 @@
 |------|------|
 | **工作台文件空间** | 每个用户一个文档空间（本地 `uploads/<user_id>/`），文件树浏览 + 在线预览（图片/文本/Markdown 内联，其他类型下载），上传/新建/删除 |
 | **ONLYOFFICE 在线编辑** | 在浏览器里编辑 `.docx/.xlsx/.pptx/.pdf`，文字可选中可改；后端做 JWT 网关（签发 config、DocServer 拉原件、保存回写沙箱），社区版容器免费 |
+| **Online AI Office（对话式改文档）** | 一边开着文档，一边在侧栏用自然语言让 AI 直接改它：改 PPT 页背景色、全文查找替换、改写选中文本。经「后端信箱 + 编辑器后台插件轮询」的 broker 桥，用 ONLYOFFICE Builder API 落到 live 会话，**实时可见、不重写文件**；社区版免费无需付费 Connector |
 | **Excalidraw 白板/思维导图** | 纯前端画板，读写 `.excalidraw`，防抖自动保存；思维导图/流程图用其自带的 mermaid→excalidraw 转换 |
 | **产物落地（save_to_workspace）** | Agent 把 Markdown/CSV/JSON/HTML/SVG/思维导图(.md) 等文本交付物写进工作台，自动进文件树，点开即用对应编辑器改 |
 | **图片型 PPT 生成** | 选风格 / 传模版 · 一句话生成整套演示 · 图片型 16:9 幻灯片；12 种预设风格（科研答辩、麦肯锡、党政红等），每页由 qwen-image 生成一整张视觉统一的图，组装为可下载的 `.pptx` |
@@ -187,6 +189,64 @@ DocumentServer 是独立容器，只认 HTTP URL，而文件在本地，所以�
 - DocServer 容器回访后端的地址用 `OFFICE_BACKEND_URL`（`host.docker.internal:8585`，**不能用 localhost**——那是容器自己）。
 - 未配置 `OFFICE_JWT_SECRET` 时，前端 `OfficeEditor.tsx` 自动回退到「下载」。
 
+### Online AI Office：对话式改 office 文档（broker 桥）
+
+让**侧栏助手**能直接改**你正在编辑器里打开的那份文档**，是这个项目的核心特性。难点在于：ONLYOFFICE 编辑器跑在多层 iframe 里，社区版又没有把编辑器 API 暴露给宿主页的付费 **Connector**——侧栏（React 应用）没法跨 iframe 直接遥控编辑器。
+
+**设计原则：编辑器是真相源，LLM 只产补丁，编辑器 API 负责落地，后端不碰 office 二进制。** 早期用后端 python-pptx 整文件重写的做法被弃用（脆：会被模板封面遮挡、无粒度、与 live 会话抢写还不刷新）。现在改走 ONLYOFFICE 插件的 `callCommand`（Builder API），在 live 会话里精确落点、所见即所得。
+
+**方案 = broker（信箱中转）桥**——两边都只跟后端讲话，绕开跨 iframe：
+
+```
+侧栏对话「把第一页背景改成红色」
+    │
+    ▼  Agent 判断是 office 编辑，调用 enqueue_office_op
+enqueue_office_op(op_type=set_slide_background, slide=0, color=#FF0000)
+    │  parse_office_op 校验（受限指令集）
+    ▼
+后端进程内信箱  _PENDING[user_id] ← op        （app/office_ops.py）
+    │
+    │   ┌───────────────────────────────────────────────┐
+    │   │  编辑器里常驻的「AI 桥」后台插件 (ai-bridge)       │
+    └──▶│  每 2s 轮询 GET /office/pending?user_id=...      │
+        │  取走 op → callCommand 落到 live 会话           │  (poll.js)
+        └───────────────────────────────────────────────┘
+                              │
+                              ▼
+              editor live 会话背景变红（即时可见）
+                              │
+              Ctrl+S / 关闭 → forcesave → /office/callback → 写回磁盘
+```
+
+**受限结构化指令集**（不是任意 Builder JS，先保安全可控）——`app/office_ops.py:parse_office_op` 校验后才入信箱：
+
+| op | 参数 | 作用 |
+|----|------|------|
+| `set_slide_background` | `slide`（0 起）、`color`（`#RRGGBB`） | 改某页 PPT 背景色 |
+| `replace_text` | `find`、`replace` | 全文查找替换 |
+| `replace_selection` | `text` | 用新文本替换当前选区（走可视插件面板） |
+
+**两个插件，各司其职**（关键坑：ONLYOFFICE 的 `autostart` 与工具栏按钮**都启动 `variations[0]`**，一个插件没法既做后台轮询又做可视面板，必须拆开）：
+
+- **`ai-bridge`**（后台常驻，`isSystem`）：`background.html` + `poll.js`，靠 `/office/config` 里的 `editorConfig.plugins.autostart` 在开编辑器时自动起轮询。这是 broker 桥的取件端。
+- **`ai-rewrite`**（可视面板）：用户手动点开，读选区文本 → 发后端/LLM 改写 → `PasteText` 写回选区。对应上面的 `replace_selection`。
+
+**关键端点/文件：**
+
+| 位置 | 作用 |
+|------|------|
+| `app/tools.py: enqueue_office_op` | Agent 工具：把编辑意图转成一个校验过的 op 投进信箱 |
+| `app/office_ops.py` | `parse_office_op`（校验）+ `_PENDING` 信箱（`enqueue_op` / `drain_ops`） |
+| `GET /office/pending?user_id=` | 后台插件的取件口，返回并清空该用户的待办 op |
+| `backend/office_plugin/ai-bridge/` | 后台轮询插件（`config.json` / `background.html` / `poll.js`） |
+| `backend/office_plugin/ai-rewrite/` | 可视改写插件（选区级） |
+
+**落地即时、落盘沿用 P2**：`callCommand` 只改 live 模型，用户即时看到变化；持久化到磁盘沿用 ONLYOFFICE 的 autosave / 关闭时 `forcesave` → `/office/callback` 写回 `uploads/<user_id>/`。
+
+> ⚠️ 部署注意（两个已知坑）：
+> 1. **插件资源的 `.gz`**：documentserver 的 nginx 开了 `gzip_static`，会**优先服务同名 `.gz`**。改完插件 `config.json/*.html/*.js` 必须重新生成 `.gz`（`gzip -kf ...`），否则浏览器拿到旧内容。
+> 2. **浏览器缓存 service worker**：ONLYOFFICE 会缓存插件注册表。若在插件上线前打开过编辑器，普通刷新可能仍走旧缓存导致后台插件不启动——用**无痕窗口**或「清空缓存并硬性重新加载」即可（全新上下文＝插件正常 autostart）。
+
 ### Excalidraw 白板
 
 纯前端组件 `WhiteboardEditor.tsx`：读 `.excalidraw`（`GET /files/raw`）→ `<Excalidraw initialData>` → onChange 防抖 800ms → 序列化写回（`PUT /files/raw`）。思维导图/流程图用 Excalidraw 自带的 mermaid→excalidraw，Agent 直接产 mermaid 即可。
@@ -208,6 +268,7 @@ DocumentServer 是独立容器，只认 HTTP URL，而文件在本地，所以�
 | `save_to_workspace` | 产物落地 | 把文本交付物（Markdown/CSV/JSON/HTML/SVG/思维导图 .md）写进工作台 `uploads/<user_id>/`，自动进文件树可编辑（5MB 上限，`../` 越权拦截） |
 | `sync_sandbox_to_workspace` | 沙箱→工作台 | 把沙箱内生成的二进制产物（如 dashi-ppt 导出的 `.pptx/.pdf`）拉回本地 `uploads/<user_id>/`，返回下载链接（50MB 上限，`../` 越权拦截） |
 | `sync_upload_to_sandbox` | 工作台→沙箱 | 把用户已上传的文件同步进沙箱，供 `terminal` 在沙箱内处理 |
+| `enqueue_office_op` | 对话式改文档 | Online AI Office：把「改 PPT 背景 / 全文替换 / 改写选区」转成受限结构化 op，校验后投进后端信箱，由编辑器后台插件轮询取走并用 Builder API 落到 live 会话（严禁用 python-pptx 重写文件） |
 | `todo` | 任务规划 | 拆解复杂任务为待办清单并跟踪进度，状态存于会话 state（单轮会话内有效） |
 | `terminal` | 终端执行 | `subprocess` 执行 shell 命令，返回 stdout/stderr/returncode（高权限，请在受信部署边界内使用） |
 | `execute_code` | 代码执行 | Google ADK 内置 `UnsafeLocalCodeExecutor`，自动编写并运行 Python 代码处理数据/计算 |
@@ -333,9 +394,13 @@ skill-ppt-agents/
 │   ├── pyproject.toml            # Python 依赖（hatchling 构建）
 │   ├── server.py                 # FastAPI 服务端（SSE 流式、文件上传/下载、缓存、/files/* 文件树、/office/* ONLYOFFICE 网关）
 │   ├── client.py                 # CLI 客户端（模拟前端，消费 SSE）
+│   ├── office_plugin/            # Online AI Office 的 ONLYOFFICE 插件
+│   │   ├── ai-bridge/            # 后台常驻插件：autostart 轮询 /office/pending → callCommand 落地（broker 桥）
+│   │   └── ai-rewrite/           # 可视改写插件：读选区 → LLM 改写 → PasteText 写回
 │   ├── app/
 │   │   ├── agent.py              # Agent 定义（DeepSeek + 技能 + 工具 + 回调）
-│   │   ├── tools.py             # 自定义工具：generate_ppt / save_to_workspace / todo / terminal / vision_analyze / clarify
+│   │   ├── tools.py             # 自定义工具：generate_ppt / save_to_workspace / enqueue_office_op / todo / terminal / vision_analyze / clarify
+│   │   ├── office_ops.py         # Online AI Office：op 校验（parse_office_op）+ 进程内信箱（_PENDING / enqueue_op / drain_ops）
 │   │   ├── sandbox.py           # 多租户沙箱隔离（OpenSandbox 预热池 + 每租户独占 + 闲置回收）
 │   │   ├── create_model.py      # 模型工厂（10+ 供应商，统一走 LiteLLM）
 │   │   ├── narrator.py           # 旁路解说回调逻辑（三回调 + 格式化）
@@ -489,6 +554,7 @@ TEST_SERVER_URL=http://host:port pytest . -v  # 对远程服务器测试
 | `GET` | `/office/config?user_id=...&path=...` | **签发 ONLYOFFICE DocEditor 配置**（JWT 签名，含 docserver 地址） |
 | `GET` | `/office/download?token=...` | **DocServer 拉取原件**（验签 → 文件字节流） |
 | `POST` | `/office/callback?token=...` | **DocServer 保存回调**（验签 → status 2/6 时写回沙箱） |
+| `GET` | `/office/pending?user_id=...` | **Online AI Office 取件口** — 编辑器后台插件轮询，返回并清空该用户待落地的编辑 op |
 | `GET` | `/cache/info` | **缓存统计信息** |
 | `DELETE` | `/cache` | **清空 SSE 缓存** |
 | `GET` | `/health` | **健康检查** |
