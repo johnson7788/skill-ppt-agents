@@ -17,6 +17,20 @@
       "initDataType": "text",
       "initData": "",
       "buttons": []
+    },
+    {
+      "description": "后台常驻：轮询后端信箱，把助手侧栏投递的 op 落到编辑器",
+      "url": "background.html",
+      "icons": [],
+      "isViewer": true,
+      "EditorsSupport": ["word", "cell", "slide"],
+      "isVisual": false,
+      "isModal": false,
+      "isInsideMode": false,
+      "isSystem": true,
+      "initDataType": "none",
+      "initData": "",
+      "buttons": []
     }
   ]
 }

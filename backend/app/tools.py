@@ -297,6 +297,52 @@ def save_to_workspace(
 
 
 # ---------------------------------------------------------------------------
+# enqueue_office_op — 把针对当前打开 office 文档的编辑操作投递给编辑器执行
+# ---------------------------------------------------------------------------
+def enqueue_office_op(
+    op_type: str,
+    tool_context: ToolContext,
+    slide: int = 0,
+    color: str = "",
+    find: str = "",
+    replace: str = "",
+    text: str = "",
+) -> dict:
+    """修改用户当前在工作台打开的 office 文档（.docx/.xlsx/.pptx）时**必须用本工具**，
+    不要用 terminal + python-pptx/python-docx/openpyxl 去重写文件——那样会与编辑器 live 会话抢写、
+    不刷新、易被模板遮挡。本工具把一个编辑操作投递给 ONLYOFFICE 编辑器，在 live 会话里所见即所得地落地。
+
+    op_type 取值及所需参数：
+    - "set_slide_background"（仅 pptx 改某页背景色）：slide=页码（从 0 开始，第一页=0），color="#RRGGBB"
+    - "replace_text"（全文查找替换）：find="原词"，replace="新词"
+    - "replace_selection"（用新文本替换用户当前选中的文本）：text="改写后的完整文本"
+
+    每次只投递一个操作；需要多处改动就多次调用。
+    返回 {"success": True, "op": {...}}；参数非法返回 {"error"}。
+    投递后直接告诉用户"已在编辑器中应用"，无需再给下载链接（改动就在打开的编辑器里）。
+    """
+    import json as _json
+
+    from app.office_ops import enqueue_op, parse_office_op
+
+    op = {"type": op_type}
+    if op_type == "set_slide_background":
+        op.update(slide=slide, color=color)
+    elif op_type == "replace_text":
+        op.update(find=find, replace=replace)
+    elif op_type == "replace_selection":
+        op.update(text=text)
+    try:
+        op = parse_office_op(_json.dumps(op))  # 复用同一套 op 校验
+    except ValueError as e:
+        return {"error": str(e)}
+
+    user_id = str(tool_context.state.get("_sbkey") or tool_context.user_id or "default_user")
+    enqueue_op(user_id, op)
+    return {"success": True, "op": op}
+
+
+# ---------------------------------------------------------------------------
 # ensure_sandbox_skills — 同步指定 skill 脚本到沙箱
 # ---------------------------------------------------------------------------
 def ensure_sandbox_skills(skill_name: str, tool_context: ToolContext) -> dict:

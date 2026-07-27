@@ -45,6 +45,7 @@ from app.narrator import (
 )
 from app.tools import (
     clarify_tool,
+    enqueue_office_op,
     ensure_sandbox_skills,
     generate_ppt,
     save_to_workspace,
@@ -165,6 +166,7 @@ root_agent = Agent(
         FunctionTool(vision_analyze),
         FunctionTool(generate_ppt),
         FunctionTool(save_to_workspace),
+        FunctionTool(enqueue_office_op),
         FunctionTool(upload_to_sandbox),
         FunctionTool(sync_upload_to_sandbox),
         FunctionTool(sync_sandbox_to_workspace),

@@ -1069,9 +1069,10 @@ export default function App({
       if (!clarifyPendingRef.current) {
         finalizeAssistant();
       }
-      // 白板/office 都可能被 agent 覆盖保存，通知外层重挂编辑器拉取最新内容
-      // ponytail: 有文件打开就通知；office 重挂会重取 config（mtime 变→document.key 变→ONLYOFFICE 重读磁盘）
-      if (openFile) onDocChanged?.();
+      // 白板走「整图重画覆盖磁盘」→ 需重挂编辑器重读磁盘。
+      // office 走 enqueue_office_op → 改动落在编辑器 live 会话（非磁盘），重挂会重读旧磁盘反而把改动冲掉，故不重挂。
+      // ponytail: 若哪天 office 又出现「agent 直接重写磁盘」的流程，那条另需重挂；当前 office 编辑一律走 live 插件。
+      if (isWhiteboard) onDocChanged?.();
     } catch (err: unknown) {
       handleStreamError(err);
     } finally {

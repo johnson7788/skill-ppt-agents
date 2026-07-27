@@ -713,6 +713,8 @@ async def office_config(path: str = "", user_id: str = "default_user"):
             "mode": "edit",
             "lang": "zh-CN",
             "callbackUrl": f"{OFFICE_BACKEND_URL}/office/callback?token={file_token}",
+            # 让后台轮询插件(poll.js)读到 user_id，才能拉对信箱（读不到退回 default_user）
+            "user": {"id": user_id, "name": user_id},
         },
     }
     config["token"] = _office_sign(config)  # 整个 config 签名，DocServer 校验
@@ -810,6 +812,17 @@ async def office_edit(body: OfficeEditIn):
         logger.error("office_edit 解析失败: %s", e)
         return JSONResponse({"error": str(e)}, status_code=500)
     return JSONResponse({"op": op})
+
+
+@app.get("/office/pending")
+async def office_pending_poll(user_id: str = "default_user"):
+    """编辑器后台插件轮询：取走并清空该用户待执行的 op（助手侧栏经 agent 投递的）。
+
+    P6.3 broker 桥：助手侧栏跨 iframe 够不到编辑器插件（社区版无 Connector），
+    改由 agent 把 op 投进后端信箱、插件在编辑器里轮询取走，用 callCommand 在 live 会话落地。
+    """
+    from app.office_ops import drain_ops
+    return JSONResponse({"ops": drain_ops(user_id)})
 
 
 # ---------------------------------------------------------------------------

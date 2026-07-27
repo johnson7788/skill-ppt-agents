@@ -29,6 +29,25 @@ SYSTEM_PROMPT = (
 )
 
 
+# ---------------------------------------------------------------------------
+# 信箱（P6.3 broker 桥）：助手侧栏经 agent 产的 op 暂存于此，等编辑器插件轮询取走。
+# 助手侧栏跨 iframe 够不到编辑器插件（社区版无 Connector），两边都只跟后端讲话即可绕开。
+# ponytail: 进程内 dict，单后端进程够用；多 worker 部署再换 redis。
+# ponytail: 按 user_id 分桶——一个用户同一时刻编辑器里就一个活动文档；多文档并发再按 doc 细分。
+# ---------------------------------------------------------------------------
+_PENDING: dict[str, list[dict]] = {}
+
+
+def enqueue_op(user_id: str, op: dict) -> None:
+    """投递一个 op 给指定用户的编辑器插件（追加到队尾）。"""
+    _PENDING.setdefault(user_id, []).append(op)
+
+
+def drain_ops(user_id: str) -> list[dict]:
+    """取走并清空该用户待执行的 op（插件轮询调用）。"""
+    return _PENDING.pop(user_id, [])
+
+
 def parse_office_op(raw: str) -> dict:
     """把 LLM 原始输出解析并校验成一个合法 op；非法则抛 ValueError。"""
     s = (raw or "").strip()
