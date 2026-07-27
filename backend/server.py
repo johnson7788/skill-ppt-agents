@@ -715,6 +715,9 @@ async def office_config(path: str = "", user_id: str = "default_user"):
             "callbackUrl": f"{OFFICE_BACKEND_URL}/office/callback?token={file_token}",
             # 让后台轮询插件(poll.js)读到 user_id，才能拉对信箱（读不到退回 default_user）
             "user": {"id": user_id, "name": user_id},
+            # 让「AI 桥」后台常驻插件开编辑器就自动跑轮询（无需手动开面板）——P6.3 broker 桥的轮询端。
+            # 注意：autostart 与工具栏按钮都启动 variations[0]，所以后台插件必须与可视「AI 改写」拆成两个插件。
+            "plugins": {"autostart": ["asc.b2c3d4e5-ai-bridge-poll-0001"]},
         },
     }
     config["token"] = _office_sign(config)  # 整个 config 签名，DocServer 校验

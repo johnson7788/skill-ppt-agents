@@ -16,6 +16,7 @@
   function applyOp(op) {
     // 后台没有选区上下文，只处理整页/整篇的 callCommand 类 op（背景/查找替换）。
     if (op.type !== "set_slide_background" && op.type !== "replace_text") return;
+    console.log("[ai-bridge] applyOp " + JSON.stringify(op));
     window.Asc.scope = window.Asc.scope || {};
     window.Asc.scope.op = op;
     window.Asc.plugin.callCommand(function () {
@@ -30,7 +31,7 @@
       } else if (op.type === "replace_text") {
         Api.GetDocument().SearchAndReplace({ searchString: op.find, replaceString: op.replace });
       }
-    }, false, false, function () {});
+    }, false, false, function () { console.log("[ai-bridge] callCommand done"); });
   }
 
   function poll() {

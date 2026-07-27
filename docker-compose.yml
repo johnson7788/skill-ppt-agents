@@ -35,3 +35,5 @@ services:
     volumes:
       # 挂进免费插件「AI 改写」（选区→LLM→写回）。社区版自动发现该目录，改后重启容器生效。
       - ./backend/office_plugin/ai-rewrite:/var/www/onlyoffice/documentserver/sdkjs-plugins/ai-rewrite
+      # 「AI 桥」后台常驻插件：autostart 轮询后端信箱→callCommand 落地（P6.3 broker 桥）
+      - ./backend/office_plugin/ai-bridge:/var/www/onlyoffice/documentserver/sdkjs-plugins/ai-bridge
