@@ -1114,7 +1114,11 @@ async def chat_stream(message: str, user_id: str = "default_user"):
             logger.error("Stream error: %s", e, exc_info=True)
             slog.log_error(str(e))
             slog.close()
-            raise
+            # 边界兜底:模型/工具调用异常(典型如 ADK litellm 对畸形/截断的 tool_call arguments
+            # 做 json.loads 失败)不该 raise 成 ASGI 500 让前端拿到死流。降级为一条友好文本 + done,
+            # 让用户看到原因并可重试。失败流不会被缓存(event_generator 里的 cache.set 因异常被跳过)。
+            yield _sse({"type": "text", "text": "\n\n⚠️ 生成过程中出错了（模型可能输出了不完整或畸形的工具调用），本次已中断。请重试；若持续失败，建议把需求拆小一些（例如减少页数或单次生成的内容量）。"})
+            yield _sse({"type": "done", "text_len": 0, "thought_count": 0, "step_count": 0, "card_count": 0})
 
     return StreamingResponse(
         safe_event_generator(),
