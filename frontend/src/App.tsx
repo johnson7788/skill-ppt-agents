@@ -117,18 +117,20 @@ type ExampleQuestion = {
 };
 
 const EXAMPLE_QUESTIONS: ExampleQuestion[] = [
-  { question: '把大语言模型的发展脉络做成一套 12 页 PPT' },
-  { question: '生成一份「Mixture-of-Experts 架构」的教学幻灯片' },
-  { question: '为「2024 年 AI 行业趋势」做一套演示，麦肯锡风格' },
-  { question: '帮我做一份公司季度业绩汇报 PPT，数据仪表盘风' },
-  // 上传资料 → 据内容生成 PPT
+  // 可编辑模式：产出可再编辑的 .pptx（dashi-ppt），支持在线预览
+  { question: '用可编辑模式，把大语言模型的发展脉络做成一套 12 页 PPT' },
+  { question: '用可编辑模式生成一份「Mixture-of-Experts 架构」的教学幻灯片' },
+  // 图片模式：整页图片型 PPT（视觉统一，不可逐字编辑）
+  { question: '用图片模式，为「2024 年 AI 行业趋势」做一套演示，麦肯锡风格' },
+  { question: '用图片模式帮我做一份公司季度业绩汇报 PPT，数据仪表盘风' },
+  // 上传资料 → 据内容生成可编辑 PPT
   {
-    question: '根据这份讲义生成一套演示文稿',
+    question: '根据这份讲义，用可编辑模式生成一套演示文稿',
     demoFile: '/demo/LongContextLLM.pptx',
   },
-  // 上传风格参考图 → 模仿风格生成
+  // 上传风格参考图 → 图片模式模仿风格生成
   {
-    question: '参照这张图的视觉风格，做一套「RAG 技术」介绍 PPT',
+    question: '参照这张图的视觉风格，用图片模式做一套「RAG 技术」介绍 PPT',
     demoFile: '/demo/benchmark_results.png',
   },
 ];
