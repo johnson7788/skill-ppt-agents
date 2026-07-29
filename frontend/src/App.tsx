@@ -28,7 +28,7 @@ import {
   Wrench,
   XCircle,
 } from 'lucide-react';
-import { streamChat, answerChat, uploadFile, listUploads, clearUploads, listDecks, deleteDeck, type Deck, type SSEEvent } from './api';
+import { streamChat, answerChat, uploadFile, listUploads, listDecks, deleteDeck, type Deck, type SSEEvent } from './api';
 
 // ─── 类型定义 ────────────────────────────────────────────────────────────────
 
@@ -989,28 +989,15 @@ export default function App() {
     setIsDragging(false);
   }, []);
 
-  const handleClearFiles = useCallback(async () => {
-    try {
-      await clearUploads(userId);
-      setUploadedFiles([]);
-      setDecks([]);
-    } catch (err) {
-      console.error('Clear failed:', err);
-    }
-  }, [userId]);
+  // 只把这些文件从「本轮 prompt 上下文」里移除，不删后端文件（侧边栏仍保留）
+  const handleClearFiles = useCallback(() => {
+    setUploadedFiles([]);
+  }, []);
 
-  const handleRemoveFile = useCallback(
-    async (fileName: string) => {
-      try {
-        await clearUploads(userId, fileName);
-        setUploadedFiles((prev) => prev.filter((f) => f.name !== fileName));
-        setDecks((prev) => prev.filter((d) => d.name !== fileName));
-      } catch (err) {
-        console.error('Remove failed:', err);
-      }
-    },
-    [userId],
-  );
+  // 只把该文件移出「本轮 prompt 上下文」，不删后端文件（侧边栏仍保留，删除走侧边栏）
+  const handleRemoveFile = useCallback((fileName: string) => {
+    setUploadedFiles((prev) => prev.filter((f) => f.name !== fileName));
+  }, []);
 
   // ─── 发送消息 ──────────────────────────────────────────────────────────
 
