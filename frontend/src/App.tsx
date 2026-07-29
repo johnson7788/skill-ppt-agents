@@ -28,7 +28,7 @@ import {
   Wrench,
   XCircle,
 } from 'lucide-react';
-import { streamChat, answerChat, uploadFile, listUploads, listDecks, deleteDeck, type Deck, type SSEEvent } from './api';
+import { streamChat, answerChat, uploadFile, listDecks, deleteDeck, type Deck, type SSEEvent } from './api';
 
 // ─── 类型定义 ────────────────────────────────────────────────────────────────
 
@@ -858,14 +858,7 @@ export default function App() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 加载已有文件
-  useEffect(() => {
-    listUploads(userId)
-      .then((data) => {
-        if (data.files) setUploadedFiles(data.files);
-      })
-      .catch(() => {});
-  }, [userId]);
+  // 聊天上下文 chips 只反映本次会话上传的文件，刷新不自动带入历史文件（历史文件在左侧边栏）
 
   // 加载文件列表（挂载时 + 每次流式结束后，捕获新上传/生成的文件）
   const loadDecks = useCallback(() => {
