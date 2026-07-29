@@ -9,10 +9,17 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
+  Download,
+  Eye,
   FileText,
+  FolderOpen,
   HelpCircle,
   Loader2,
+  PanelLeftClose,
+  PanelLeftOpen,
   Paperclip,
+  Presentation,
+  RefreshCw,
   Search,
   Square,
   Terminal,
@@ -20,9 +27,10 @@ import {
   Upload,
   User,
   Wrench,
+  X,
   XCircle,
 } from 'lucide-react';
-import { streamChat, answerChat, uploadFile, listUploads, clearUploads, type SSEEvent } from './api';
+import { streamChat, answerChat, uploadFile, listUploads, clearUploads, listDecks, deleteDeck, type Deck, type SSEEvent } from './api';
 
 // ─── 类型定义 ────────────────────────────────────────────────────────────────
 
@@ -682,6 +690,194 @@ function ClarifyCard({
 
 // ─── 主组件 ──────────────────────────────────────────────────────────────────
 
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// ─── 侧边栏：已生成的 PPT deck 列表（预览 / 下载 / 删除） ──────────────────────
+
+function DeckSidebar({
+  open,
+  onToggle,
+  decks,
+  loading,
+  userId,
+  onRefresh,
+  onPreview,
+  onDelete,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  decks: Deck[];
+  loading: boolean;
+  userId: string;
+  onRefresh: () => void;
+  onPreview: (d: Deck) => void;
+  onDelete: (d: Deck) => void;
+}) {
+  const downloadHref = (name: string) =>
+    `/download?user_id=${encodeURIComponent(userId)}&file=${encodeURIComponent(name)}`;
+  if (!open) {
+    return (
+      <div className="w-11 shrink-0 border-r border-slate-800 bg-[#0b0f19] flex flex-col items-center py-3">
+        <button
+          onClick={onToggle}
+          title="展开文件栏"
+          className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 rounded-lg"
+        >
+          <PanelLeftOpen className="w-5 h-5" />
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="w-64 shrink-0 border-r border-slate-800 bg-[#0b0f19] flex flex-col">
+      <div className="flex items-center gap-2 px-3 py-3 border-b border-slate-800">
+        <FolderOpen className="w-4 h-4 text-blue-400" />
+        <span className="text-sm font-medium text-slate-300">我的文件</span>
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            onClick={onRefresh}
+            title="刷新"
+            className="p-1.5 text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 rounded-lg"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            onClick={onToggle}
+            title="收起"
+            className="p-1.5 text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 rounded-lg"
+          >
+            <PanelLeftClose className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        {decks.length === 0 && !loading && (
+          <div className="text-[12px] text-slate-500 text-center px-2 py-8 leading-relaxed">
+            还没有文件。
+            <br />
+            上传文件或让 AI 生成 PPT 都会出现在这里。
+          </div>
+        )}
+        {decks.map((d) => {
+          const canPreview = !!d.preview_path;
+          return (
+            <div
+              key={d.name}
+              className="group rounded-lg border border-slate-800/80 bg-[#151b28] hover:border-slate-700 transition-colors"
+            >
+              <button
+                onClick={() => canPreview && onPreview(d)}
+                disabled={!canPreview}
+                className={`w-full text-left px-3 pt-2.5 pb-1.5 ${canPreview ? '' : 'cursor-default'}`}
+                title={canPreview ? `预览 ${d.name}` : d.name}
+              >
+                <div className="flex items-start gap-2">
+                  <FileText className="w-4 h-4 text-blue-400/70 shrink-0 mt-0.5" />
+                  <span className="text-[13px] text-slate-300 leading-snug break-all line-clamp-2">
+                    {d.name}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1 ml-6">{formatSize(d.size)}</div>
+              </button>
+              <div className="flex items-center gap-1 px-2 pb-2 ml-4">
+                {canPreview && (
+                  <button
+                    onClick={() => onPreview(d)}
+                    className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-blue-300 px-1.5 py-1 rounded hover:bg-slate-800/60"
+                    title="在线预览"
+                  >
+                    <Eye className="w-3.5 h-3.5" /> 预览
+                  </button>
+                )}
+                <a
+                  href={downloadHref(d.name)}
+                  download
+                  className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-emerald-300 px-1.5 py-1 rounded hover:bg-slate-800/60"
+                  title="下载"
+                >
+                  <Download className="w-3.5 h-3.5" /> 下载
+                </a>
+                <button
+                  onClick={() => onDelete(d)}
+                  className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-red-400 px-1.5 py-1 rounded hover:bg-slate-800/60 ml-auto"
+                  title="删除"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PreviewModal({
+  deck,
+  userId,
+  onClose,
+}: {
+  deck: Deck;
+  userId: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const previewUrl = `/preview?path=${encodeURIComponent(deck.preview_path || '')}`;
+  const downloadUrl = `/download?user_id=${encodeURIComponent(userId)}&file=${encodeURIComponent(deck.name)}`;
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/70 flex flex-col p-4 sm:p-8"
+      onClick={onClose}
+    >
+      <div
+        className="flex-1 flex flex-col bg-[#0b0f19] rounded-xl border border-slate-700 overflow-hidden max-w-6xl w-full mx-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-800 shrink-0">
+          <Presentation className="w-4 h-4 text-blue-400" />
+          <span className="text-sm text-slate-300 truncate">{deck.name}</span>
+          <div className="ml-auto flex items-center gap-2">
+            <a
+              href={downloadUrl}
+              download
+              className="flex items-center gap-1.5 text-[12px] text-slate-300 hover:text-emerald-300 bg-slate-800/60 hover:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-700/50"
+            >
+              <Download className="w-3.5 h-3.5" /> 下载
+            </a>
+            <a
+              href={previewUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[12px] text-slate-400 hover:text-slate-200 px-2 py-1.5"
+            >
+              新窗口打开
+            </a>
+            <button
+              onClick={onClose}
+              className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 rounded-lg"
+              title="关闭"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+        <iframe src={previewUrl} className="flex-1 w-full bg-white" title={deck.name} />
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [messages, setMessages] = useState<HistoryMessage[]>([]);
   const [input, setInput] = useState('');
@@ -712,6 +908,12 @@ export default function App() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // PPT deck 侧边栏
+  const [decks, setDecks] = useState<Deck[]>([]);
+  const [decksLoading, setDecksLoading] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [previewDeck, setPreviewDeck] = useState<Deck | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // 加载已有文件
@@ -722,6 +924,34 @@ export default function App() {
       })
       .catch(() => {});
   }, [userId]);
+
+  // 加载文件列表（挂载时 + 每次流式结束后，捕获新上传/生成的文件）
+  const loadDecks = useCallback(() => {
+    setDecksLoading(true);
+    listDecks(userId)
+      .then((data) => setDecks(data.decks || []))
+      .catch(() => {})
+      .finally(() => setDecksLoading(false));
+  }, [userId]);
+
+  useEffect(() => {
+    if (!isStreaming) loadDecks();
+  }, [isStreaming, loadDecks]);
+
+  const handleDeleteDeck = useCallback(
+    async (d: Deck) => {
+      if (!window.confirm(`确定删除「${d.name}」？此操作不可撤销。`)) return;
+      try {
+        await deleteDeck(d.name, userId);
+        setDecks((prev) => prev.filter((x) => x.name !== d.name));
+        setUploadedFiles((prev) => prev.filter((x) => x.name !== d.name));
+        setPreviewDeck((cur) => (cur?.name === d.name ? null : cur));
+      } catch (err) {
+        console.error('Delete file failed:', err);
+      }
+    },
+    [userId],
+  );
 
   // 自动滚底
   useEffect(() => {
@@ -759,13 +989,14 @@ export default function App() {
           ...prev,
           { name: result.filename, size: result.size, path: result.path || '' },
         ]);
+        loadDecks();
       }
     } catch (err) {
       console.error('Upload failed:', err);
     } finally {
       setUploading(false);
     }
-  }, []);
+  }, [userId, loadDecks]);
 
   const handleFileSelect = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
@@ -823,6 +1054,7 @@ export default function App() {
     try {
       await clearUploads(userId);
       setUploadedFiles([]);
+      setDecks([]);
     } catch (err) {
       console.error('Clear failed:', err);
     }
@@ -830,17 +1062,16 @@ export default function App() {
 
   const handleRemoveFile = useCallback(
     async (fileName: string) => {
-      setUploadedFiles((prev) => prev.filter((f) => f.name !== fileName));
-      await clearUploads(userId);
+      try {
+        await clearUploads(userId, fileName);
+        setUploadedFiles((prev) => prev.filter((f) => f.name !== fileName));
+        setDecks((prev) => prev.filter((d) => d.name !== fileName));
+      } catch (err) {
+        console.error('Remove failed:', err);
+      }
     },
     [userId],
   );
-
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  };
 
   // ─── 发送消息 ──────────────────────────────────────────────────────────
 
@@ -1113,7 +1344,18 @@ export default function App() {
   }, [input]);
 
   return (
-    <div className="h-screen flex flex-col bg-[#0b0f19] font-sans selection:bg-blue-500/30">
+    <div className="h-screen flex bg-[#0b0f19] font-sans selection:bg-blue-500/30">
+      <DeckSidebar
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen((v) => !v)}
+        decks={decks}
+        loading={decksLoading}
+        userId={userId}
+        onRefresh={loadDecks}
+        onPreview={setPreviewDeck}
+        onDelete={handleDeleteDeck}
+      />
+      <div className="flex-1 flex flex-col min-w-0">
       <Header userId={userId} onUserIdChange={setUserId} />
 
       <main className="flex-1 overflow-y-auto py-6">
@@ -1294,6 +1536,15 @@ export default function App() {
           内容由 AI 生成，请仔细甄别。
         </div>
       </div>
+      </div>
+
+      {previewDeck && (
+        <PreviewModal
+          deck={previewDeck}
+          userId={userId}
+          onClose={() => setPreviewDeck(null)}
+        />
+      )}
     </div>
   );
 }

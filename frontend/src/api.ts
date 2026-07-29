@@ -134,12 +134,44 @@ export async function listUploads(userId: string = 'default_user') {
 }
 
 /**
- * 清除用户所有已上传的文件
+ * 用户文件（uploads/<user_id> 里的一个文件）。preview_path 非空时可在线预览。
  */
-export async function clearUploads(userId: string = 'default_user') {
-  const response = await fetch(`${API_BASE}/uploads?user_id=${encodeURIComponent(userId)}`, {
-    method: 'DELETE',
-  });
+export interface Deck {
+  name: string;
+  preview_path: string | null;
+  size: number;
+  modified: number;
+}
+
+/**
+ * 列出用户所有文件（uploads/<user_id>），含可选预览路径
+ */
+export async function listDecks(userId: string = 'default_user'): Promise<{ decks: Deck[] }> {
+  const response = await fetch(`${API_BASE}/decks?user_id=${encodeURIComponent(userId)}`);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
+/**
+ * 删除一个用户文件（连同其匹配的生成 deck 目录）
+ */
+export async function deleteDeck(name: string, userId: string = 'default_user') {
+  const response = await fetch(
+    `${API_BASE}/decks?name=${encodeURIComponent(name)}&user_id=${encodeURIComponent(userId)}`,
+    { method: 'DELETE' },
+  );
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
+/**
+ * 删除用户文件：传 fileName 删单个，否则清空全部
+ */
+export async function clearUploads(userId: string = 'default_user', fileName?: string) {
+  const url = fileName
+    ? `${API_BASE}/uploads?user_id=${encodeURIComponent(userId)}&file=${encodeURIComponent(fileName)}`
+    : `${API_BASE}/uploads?user_id=${encodeURIComponent(userId)}`;
+  const response = await fetch(url, { method: 'DELETE' });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
   }

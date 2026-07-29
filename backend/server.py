@@ -584,12 +584,81 @@ if os.path.isdir(_preview_static_dir):
 
 
 @app.delete("/uploads")
-async def clear_uploads(user_id: str = "default_user"):
+async def clear_uploads(user_id: str = "default_user", file: str = ""):
+    """删除用户文件：给了 `file` 删单个，否则清空整个 uploads/<user_id>。"""
     import shutil
     user_dir = UPLOADS_DIR / user_id
+    if file:
+        if "/" in file or "\\" in file or file in (".", ".."):
+            return JSONResponse({"error": "Invalid file"}, status_code=400)
+        target = (user_dir.resolve() / os.path.basename(file)).resolve()
+        if not str(target).startswith(str(user_dir.resolve())) or not target.is_file():
+            return JSONResponse({"error": "文件不存在"}, status_code=404)
+        target.unlink()
+        return JSONResponse({"success": True})
     if user_dir.exists():
         shutil.rmtree(user_dir)
         user_dir.mkdir(parents=True, exist_ok=True)
+    return JSONResponse({"success": True})
+
+
+# ---------------------------------------------------------------------------
+# 用户文件栏：uploads/<user_id> 是用户所有文件的唯一目录。能匹配到生成的
+# HTML deck 的文件附带 preview_path（可在线预览），其余仅可下载/删除。
+# ---------------------------------------------------------------------------
+def _deck_output_dir() -> str:
+    from app.dashi_tools import _dashi_paths
+    return os.path.realpath(os.path.join(_dashi_paths()[1], "output"))
+
+
+@app.get("/decks")
+async def list_decks(user_id: str = "default_user"):
+    """列出 uploads/<user_id> 下所有文件；文件名（去扩展名）匹配到生成的
+    deck HTML 时给出 preview_path，供侧边栏在线预览。"""
+    user_dir = UPLOADS_DIR / user_id
+    output_dir = _deck_output_dir()
+    items = []
+    if user_dir.exists():
+        for f in user_dir.iterdir():
+            if not f.is_file():
+                continue
+            stem = os.path.splitext(f.name)[0]
+            index_html = os.path.join(output_dir, stem, "ppt", "index.html")
+            preview_path = f"output/{stem}/ppt/index.html" if os.path.isfile(index_html) else None
+            st = f.stat()
+            items.append({
+                "name": f.name,
+                "preview_path": preview_path,
+                "size": st.st_size,
+                "modified": st.st_mtime,
+            })
+    items.sort(key=lambda d: d["modified"], reverse=True)
+    return JSONResponse({"decks": items})
+
+
+@app.delete("/decks")
+async def delete_deck(name: str = "", user_id: str = "default_user"):
+    """删除用户文件 uploads/<user_id>/<name>，并连带清掉其同名生成 deck 目录。"""
+    import shutil
+    if not name or "/" in name or "\\" in name or name in (".", ".."):
+        return JSONResponse({"error": "Invalid name"}, status_code=400)
+    user_dir = (UPLOADS_DIR / user_id).resolve()
+    target = (user_dir / os.path.basename(name)).resolve()
+    if not str(target).startswith(str(user_dir)):
+        return JSONResponse({"error": "Access denied"}, status_code=403)
+    removed = target.is_file()
+    if removed:
+        target.unlink()
+    # 同名生成 deck 目录（含预览 HTML）一并移除，保持左侧与磁盘一致
+    stem = os.path.splitext(os.path.basename(name))[0]
+    output_dir = _deck_output_dir()
+    deck_dir = os.path.realpath(os.path.join(output_dir, stem))
+    if (os.path.commonpath([output_dir, deck_dir]) == output_dir
+            and deck_dir != output_dir and os.path.isdir(deck_dir)):
+        shutil.rmtree(deck_dir)
+        removed = True
+    if not removed:
+        return JSONResponse({"error": "Not found"}, status_code=404)
     return JSONResponse({"success": True})
 
 

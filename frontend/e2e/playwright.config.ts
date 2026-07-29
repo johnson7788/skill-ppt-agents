@@ -2,6 +2,7 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: '.',
+  globalSetup: './global-setup.ts',
   timeout: 300_000, // 5 min — agent research takes time
   retries: 0,
   use: {

@@ -22,6 +22,29 @@ def _dashi_paths() -> tuple[str, str]:
     return root, os.path.join(root, "project")
 
 
+def _slugify_segment(seg: str) -> str:
+    """Normalize one path segment to a stable ASCII slug.
+
+    Deck names chosen by the agent are often Chinese; Chinese in the on-disk
+    dir leaks into preview_url/download_url, where URL-encoding + the agent
+    re-typing the link breaks the path. Slugging every segment through one
+    deterministic function keeps scaffold/render/stage_media in agreement and
+    yields copy-safe ASCII URLs. ASCII names (e.g. "goal.json", "ppt",
+    "llm-evolution") pass through unchanged; any segment carrying non-ASCII
+    gets an 8-char hash of the original appended so distinct decks never
+    collide onto the same slug.
+    """
+    import hashlib
+
+    if not seg or seg in (".", ".."):
+        return seg
+    kept = re.sub(r"[^A-Za-z0-9._-]+", "-", seg).strip("-._")
+    if kept == seg:
+        return seg
+    h = hashlib.md5(seg.encode("utf-8")).hexdigest()[:8]
+    return f"{kept}-{h}" if kept else f"deck-{h}"
+
+
 def _resolve_project_output_path(
     project_root: str,
     path: str,
@@ -46,6 +69,11 @@ def _resolve_project_output_path(
         raise ValueError("absolute paths are not allowed")
     if any(part == ".." for part in portable.split("/")):
         raise ValueError("parent traversal is not allowed")
+
+    # Normalize every segment to a stable ASCII slug so Chinese deck names do
+    # not leak into (and break) preview_url/download_url. Deterministic, so
+    # scaffold/render/stage_media all resolve to the same on-disk directory.
+    portable = "/".join(_slugify_segment(p) for p in portable.split("/") if p)
 
     project_abs = os.path.realpath(os.path.abspath(project_root))
     output_abs = os.path.realpath(os.path.join(project_abs, "output"))
