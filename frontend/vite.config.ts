@@ -13,14 +13,14 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     allowedHosts: true,
-    port: 3585,
+    port: 3686,
     hmr: process.env.DISABLE_HMR !== 'true',
     watch: process.env.DISABLE_HMR === 'true' ? null : {},
     proxy: {
-      '/chat': 'http://localhost:8585',
-      '/upload': 'http://localhost:8585',
-      '/uploads': 'http://localhost:8585',
-      '/download': 'http://localhost:8585',
+      '/chat': 'http://localhost:8686',
+      '/upload': 'http://localhost:8686',
+      '/uploads': 'http://localhost:8686',
+      '/download': 'http://localhost:8686',
     },
   },
 });

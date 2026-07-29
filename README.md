@@ -241,7 +241,7 @@ Agent 规划提纲，为每页写英文出图 prompt + 中文演讲备注
 #    SANDBOX_ENABLED=true
 #    SANDBOX_IMAGE=my-sandbox:latest
 
-# 4. 启动应用（后端 :8585 + 前端 :3585），后端会自动向服务端创建每租户沙箱
+# 4. 启动应用（后端 :8686 + 前端 :3686），后端会自动向服务端创建每租户沙箱
 ./start.sh
 ```
 
@@ -260,7 +260,7 @@ skill-ppt-agents/
 ├── sandbox-image/                # 沙箱镜像（python:3.12 + pandoc + 技能脚本预装）
 ├── prepare.sh                    # 一次性环境准备：检查 Docker、拉取 execd 镜像、构建沙箱镜像、写入 OpenSandbox 服务端配置与 CLI 配置
 ├── start_sandbox.sh              # 启动 OpenSandbox 服务端（:8080，幂等——已在运行则自动跳过）；沙箱由后端连接池按租户自动创建
-├── start.sh                      # 本地开发启动：后端（:8585，uv run）+ 前端（:3585，npm run dev），Ctrl+C 统一关闭
+├── start.sh                      # 本地开发启动：后端（:8686，uv run）+ 前端（:3686，npm run dev），Ctrl+C 统一关闭
 ├── deploy.sh                     # 生产部署（git pull → docker compose up → 健康检查）；基础版本，尚未详细优化
 │
 ├── backend/
@@ -337,7 +337,7 @@ npm install
 cp backend/env_example backend/.env
 # 编辑 backend/.env，填入 DEEPSEEK_API_KEY
 
-# 4. 一键启动（后端 :8585 + 前端 :3585）
+# 4. 一键启动（后端 :8686 + 前端 :3686）
 ./start.sh
 
 ```
@@ -520,7 +520,7 @@ cd manage_frontend && npm install && npm run dev               # 管理前端（
 |------|------|--------|
 | `DEEPSEEK_MODEL` | 模型标识 | `deepseek-v4-pro` |
 | `DEEPSEEK_BASE_URL` | API 基础地址 | `https://api.deepseek.com/v1` |
-| `PORT` | 后端端口 | `8585`（开发）/ `8046`（Docker） |
+| `PORT` | 后端端口 | `8686`（开发）/ `8046`（Docker） |
 | `HOST` | 绑定地址 | `0.0.0.0` |
 | `SEARXNG_BASE_URL` | SearXNG 实例地址（需自部署） | `http://localhost:8080/search` |
 | `SEARXNG_MAX_ATTEMPTS` | SearXNG 重试次数 | `3` |

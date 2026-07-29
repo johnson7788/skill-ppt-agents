@@ -36,9 +36,9 @@ echo -e "${GREEN}  启动科研助手${NC}"
 echo -e "${GREEN}========================================${NC}"
 
 # 启动后端
-echo -e "${YELLOW}启动后端 (端口 8585)...${NC}"
+echo -e "${YELLOW}启动后端 (端口 8686)...${NC}"
 cd "$PROJECT_DIR/backend"
-uv run python server.py --port 8585 &
+uv run python server.py --port 8686 &
 BACKEND_PID=$!
 
 # 等待后端就绪
@@ -48,7 +48,7 @@ for i in $(seq 1 60); do
         echo -e "${YELLOW}后端进程已退出，启动失败${NC}"
         cleanup
     fi
-    if curl -sf "http://localhost:8585/docs" >/dev/null 2>&1; then
+    if curl -sf "http://localhost:8686/docs" >/dev/null 2>&1; then
         echo -e "${GREEN}✓ 后端已就绪${NC}"
         break
     fi
@@ -59,7 +59,7 @@ for i in $(seq 1 60); do
 done
 
 # 启动前端
-echo -e "${YELLOW}启动前端 (端口 3585)...${NC}"
+echo -e "${YELLOW}启动前端 (端口 3686)...${NC}"
 cd "$PROJECT_DIR/frontend"
 npm run dev &
 FRONTEND_PID=$!
@@ -70,9 +70,9 @@ echo -e "${GREEN}  服务已就绪${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}后端 PID: $BACKEND_PID${NC}"
 echo -e "${GREEN}前端 PID: $FRONTEND_PID${NC}"
-echo -e "${GREEN}前端地址: http://localhost:3585${NC}"
-echo -e "${GREEN}后端地址: http://localhost:8585${NC}"
-echo -e "${GREEN}API 文档: http://localhost:8585/docs${NC}"
+echo -e "${GREEN}前端地址: http://localhost:3686${NC}"
+echo -e "${GREEN}后端地址: http://localhost:8686${NC}"
+echo -e "${GREEN}API 文档: http://localhost:8686/docs${NC}"
 echo ""
 echo -e "${YELLOW}按 Ctrl+C 关闭所有服务${NC}"
 

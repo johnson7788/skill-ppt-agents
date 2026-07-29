@@ -50,7 +50,8 @@ logger = logging.getLogger("skill_ppt_agent")
 
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.artifacts import InMemoryArtifactService
 from google.adk.runners import Runner
@@ -527,13 +528,59 @@ async def list_uploads(user_id: str = "default_user"):
 
 
 @app.get("/download")
-async def download_file(user_id: str = "default_user", file: str = ""):
-    """下载用户目录下的产物文件（如生成的 .pptx）。仅限 uploads/<user_id>/ 内。"""
+async def download_file(user_id: str = "default_user", file: str = "", path: str = ""):
+    """下载产物文件。
+
+    - dashi-ppt 产物：`?path=<project 相对路径>`，从 skills/dashi-ppt/project 下取。
+    - 用户上传/生成物：`?user_id=&file=`，从 uploads/<user_id>/ 取。
+    """
+    if path:
+        import mimetypes
+        from app.dashi_tools import _dashi_paths
+        if ".." in path or path.startswith("/"):
+            return JSONResponse({"error": "Invalid path"}, status_code=400)
+        _, project_root = _dashi_paths()
+        full_path = os.path.normpath(os.path.join(project_root, path))
+        if not full_path.startswith(os.path.normpath(project_root)):
+            return JSONResponse({"error": "Access denied"}, status_code=403)
+        if not os.path.isfile(full_path):
+            return JSONResponse({"error": f"File not found: {path}"}, status_code=404)
+        mime_type = mimetypes.guess_type(full_path)[0] or "application/octet-stream"
+        return FileResponse(full_path, media_type=mime_type, filename=os.path.basename(full_path))
     user_dir = (UPLOADS_DIR / user_id).resolve()
     target = (user_dir / os.path.basename(file)).resolve()
     if not str(target).startswith(str(user_dir)) or not target.is_file():
         return JSONResponse({"error": "文件不存在"}, status_code=404)
     return FileResponse(str(target), filename=target.name)
+
+
+# GET /preview — 预览 dashi-ppt 生成的 HTML（注入 <base> 让相对资源走 /preview-static）
+@app.get("/preview")
+async def preview_html(path: str = ""):
+    from app.dashi_tools import _dashi_paths
+    if not path:
+        return JSONResponse({"error": "path parameter required"}, status_code=400)
+    if ".." in path or path.startswith("/"):
+        return JSONResponse({"error": "Invalid path"}, status_code=400)
+    _, project_root = _dashi_paths()
+    full_path = os.path.normpath(os.path.join(project_root, path))
+    if not full_path.startswith(os.path.normpath(project_root)):
+        return JSONResponse({"error": "Access denied"}, status_code=403)
+    if not os.path.isfile(full_path):
+        return JSONResponse({"error": f"File not found: {path}"}, status_code=404)
+    html = open(full_path, "r", encoding="utf-8").read()
+    if "<base " not in html:
+        html_dir = os.path.dirname(path)
+        base_href = "/preview-static/" + html_dir + "/" if html_dir else "/preview-static/"
+        html = html.replace("<head>", '<head><base href="' + base_href + '">')
+    return HTMLResponse(content=html)
+
+
+# 挂载 project 目录为静态资源（预览 HTML 的字体/css/js）
+from app.dashi_tools import _dashi_paths as _dashi_paths_mount
+_preview_static_dir = _dashi_paths_mount()[1]
+if os.path.isdir(_preview_static_dir):
+    app.mount("/preview-static", StaticFiles(directory=_preview_static_dir, html=False), name="preview_static")
 
 
 @app.delete("/uploads")
@@ -1039,7 +1086,7 @@ def _sse(data: dict) -> str:
 # ---------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8585)
+    parser.add_argument("--port", type=int, default=8686)
     parser.add_argument("--host", default="0.0.0.0")
     args = parser.parse_args()
     import uvicorn

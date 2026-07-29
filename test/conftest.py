@@ -17,7 +17,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # 配置常量
 # ---------------------------------------------------------------------------
-DEFAULT_SERVER_URL = "http://localhost:8585"
+DEFAULT_SERVER_URL = "http://localhost:8686"
 TEST_USER_PREFIX = "test_sse_"
 # LLM 调用可能耗时较长，默认 3 分钟
 DEFAULT_TIMEOUT = 600.0

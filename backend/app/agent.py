@@ -38,6 +38,13 @@ from google.adk.tools.skill_toolset import SkillToolset
 
 from app import sandbox as sbx
 from app.create_model import create_model
+from app.dashi_tools import (
+    dashi_fill_slide,
+    dashi_render,
+    dashi_scaffold,
+    dashi_script,
+    dashi_stage_media,
+)
 from app.narrator import (
     after_model_callback,
     after_tool_callback,
@@ -156,6 +163,11 @@ root_agent = Agent(
         FunctionTool(terminal),
         FunctionTool(vision_analyze),
         FunctionTool(generate_ppt),
+        FunctionTool(dashi_script),
+        FunctionTool(dashi_scaffold),
+        FunctionTool(dashi_stage_media),
+        FunctionTool(dashi_fill_slide),
+        FunctionTool(dashi_render),
         FunctionTool(upload_to_sandbox),
         FunctionTool(sync_upload_to_sandbox),
         # FunctionTool(ensure_sandbox_skills),
