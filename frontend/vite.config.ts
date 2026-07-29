@@ -21,6 +21,8 @@ export default defineConfig({
       '/upload': 'http://localhost:8686',
       '/uploads': 'http://localhost:8686',
       '/download': 'http://localhost:8686',
+      '/preview': 'http://localhost:8686',
+      '/preview-static': 'http://localhost:8686',
     },
   },
 });
