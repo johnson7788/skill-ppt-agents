@@ -2508,6 +2508,12 @@
       if(serverSaveQueued){
         serverSaveQueued = false;
         scheduleServerSave();
+      } else if(succeeded){
+        // 服务端已确认把这份 state 烧回 index.html 本体——本体即真相源。清掉 localStorage
+        // 草稿,否则旧草稿会在下次加载时(readSaved)反向覆盖已落盘的正确内容,出现“保存成功
+        // 但刷新后某页仍是旧/空内容”。仅在没有排队的新编辑时清(有排队说明草稿更新,留给下一次
+        // 成功保存再清),避免丢掉保存期间用户继续输入的、尚未落盘的编辑。
+        try { localStorage.removeItem(STORE); } catch {}
       }
     }
   }
