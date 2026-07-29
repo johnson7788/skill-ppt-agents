@@ -9,8 +9,9 @@
 | 功能 | 说明 |
 |------|------|
 | **图片型 PPT 生成** | 选风格 / 传模版 · 一句话生成整套演示 · 图片型 16:9 幻灯片；12 种预设风格（科研答辩、麦肯锡、党政红等），每页由 qwen-image 生成一整张视觉统一的图，组装为可下载的 `.pptx` |
+| **可编辑 PPT 生成** | dashi-ppt 引擎（PptxGenJS），产出真 OOXML `.pptx`，可在 PowerPoint/WPS 中二次编辑 |
 | **arXiv 论文检索** | 接入 arXiv 公开 API，支持按相关性/最新提交并行检索、按分类/作者检索、自由检索表达式 |
-| **网页搜索** | 自建 SearXNG 实例，支持通用/新闻/图片/视频搜索，自动重试与诊断 |
+| **网页搜索** | Bing 搜索，支持关键词搜索、站点限定、高级组合搜索、网页正文抓取，内置反爬方案 |
 | **文件上传问答** | 支持 PDF、PPTX、PPT、TXT 文件上传，自动提取内容并带位置标记（`[第X页]`、`[幻灯片X]`）注入 LLM 上下文 |
 | **任务规划（todo）** | 面对多步骤研究任务，Agent 先拆解出待办清单并逐步推进、实时更新进度 |
 | **终端执行（terminal）** | 在服务器上执行 shell 命令，查看环境、运行脚本、读取文件 |
@@ -22,7 +23,6 @@
 | **SSE 流式输出** | 6 种事件类型实时推送，前端逐字打字机效果展示 |
 | **SSE 响应缓存** | 相同问题秒级回放缓存结果（持久化到 `cache/` 目录，TTL 24h、LRU 淘汰） |
 | **会话日志** | 每轮对话完整记录到 JSONL 文件，含事件历史、耗时、元数据 |
-| **管理端** | 独立管理面板：Agent 配置编辑与版本回滚、技能管理、日志分析、LLM 智能优化建议 |
 
 ---
 
@@ -69,7 +69,7 @@
 |----------|------|----------|
 | 综合论文 | arxiv-paper-search (all) | retrieval augmented generation + long context |
 | 最新进展 | arxiv-paper-search (recent) | long context language model |
-| 代码/解读 | searxng (general) | RAG vs long context window benchmark |
+| 代码/解读 | bingsearch (general) | RAG vs long context window benchmark |
 
 ### 回答正文（节选）
 
@@ -293,24 +293,6 @@ skill-ppt-agents/
 │       ├── api.ts                # SSE 客户端（streamChat/answerChat）、文件上传/列表/清理 API
 │       └── index.css             # Tailwind + 自定义样式
 │
-├── manage_backend/               # 管理后端（FastAPI，端口 8686）
-│   ├── server.py                 # 管理服务端（Agent 配置、技能管理、日志分析、智能优化）
-│   ├── app/
-│   │   └── config.py             # 路径配置（指向主 backend 的文件系统）
-│   └── data/                     # 版本历史快照（agent_versions/、skill_versions/）
-│
-├── manage_frontend/              # 管理前端（React + Vite，端口 3686）
-│   ├── package.json
-│   ├── vite.config.ts
-│   └── src/
-│       ├── App.tsx               # 路由 + 侧边栏布局
-│       └── pages/
-│           ├── AgentPage.tsx     # Agent 配置编辑 + 版本回滚
-│           ├── SkillsPage.tsx    # 技能列表 + 新建/删除
-│           ├── SkillDetailPage.tsx # 技能详情（SKILL.md 编辑 + 脚本管理）
-│           ├── LogsPage.tsx      # 日志浏览 + 聚合分析
-│           └── OptimizePage.tsx  # LLM 驱动的智能优化建议
-│
 ├── test/                         # 集成测试（pytest + httpx）
 │   ├── test_specific_question.py # 论文问答 + 缓存测试
 │   └── test_ppt_qa.py            # PPT 上传 + 幻灯片引用问答测试
@@ -446,65 +428,6 @@ npm run build      # 生产构建 → dist/
 
 ---
 
-## 管理端
-
-独立的管理面板，提供 Agent 配置编辑、技能管理、日志分析和 LLM 驱动的智能优化建议。管理后端直接读写主 backend 的文件系统，修改后重启主服务即可生效。
-
-![优化智能体界面](docs/优化智能体界面.png)
-
-**技术栈：** React 19 + TypeScript + Tailwind CSS 4（前端）/ FastAPI + litellm（后端）
-
-### 功能模块
-
-| 模块 | 路径 | 说明 |
-|------|------|------|
-| **Agent 配置** | `/agent` | 在线编辑 Agent 的 `instruction` 和 `description`，支持版本历史和一键回滚 |
-| **技能管理** | `/skills` | 查看、创建、删除技能；编辑 SKILL.md 指导文档和 Python 脚本，每次修改自动保存版本快照 |
-| **日志分析** | `/logs` | 浏览 JSONL 会话日志，查看事件分布、工具调用记录和错误信息；全局聚合分析工具使用率和成功率 |
-| **智能优化** | `/optimize` | 将日志分析结果和当前配置发送给 DeepSeek，生成指令优化建议、技能改进方案和新技能创意 |
-
-### 架构特点
-
-- **文件系统直连**：管理后端通过读写 `backend/app/agent.py`、`backend/app/skills/`、`backend/logs/` 操作主服务，无需 HTTP 中转
-- **版本安全网**：每次编辑操作自动保存 JSON 快照到 `manage_backend/data/`，支持回滚到任意历史版本
-- **无认证**：设计为内部开发/管理工具，CORS 全开放
-
-### 管理 API
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET` | `/api/agent` | 读取当前 Agent 配置（名称、描述、指令、模型） |
-| `PUT` | `/api/agent/instruction` | 更新 Agent 指令（自动保存版本） |
-| `PUT` | `/api/agent/description` | 更新 Agent 描述（自动保存版本） |
-| `GET` | `/api/agent/versions` | 列出 Agent 配置历史版本 |
-| `POST` | `/api/agent/rollback` | 回滚到指定版本 |
-| `GET` | `/api/skills` | 列出所有技能 |
-| `GET` | `/api/skills/{slug}` | 获取技能详情（SKILL.md + 脚本内容） |
-| `POST` | `/api/skills` | 创建新技能 |
-| `DELETE` | `/api/skills/{slug}` | 删除技能（自动备份） |
-| `PUT` | `/api/skills/{slug}/md` | 更新 SKILL.md |
-| `PUT` | `/api/skills/{slug}/scripts/{name}` | 更新脚本文件 |
-| `POST` | `/api/skills/{slug}/scripts` | 创建新脚本 |
-| `GET` | `/api/logs` | 列出日志文件 |
-| `GET` | `/api/logs/{filename}` | 查看单个日志详情 |
-| `GET` | `/api/logs/analyze` | 全局日志聚合分析 |
-| `POST` | `/api/optimize/suggestions` | LLM 驱动的智能优化建议 |
-| `GET` | `/api/status` | 系统状态 |
-| `GET` | `/health` | 健康检查 |
-
-### 启动管理端
-
-```bash
-# 一键启动（管理后端 :8686 + 管理前端 :3686）
-./start_manage.sh
-
-# 或分别启动：
-cd manage_backend && uv run python server.py --port 8686     # 管理后端
-cd manage_frontend && npm install && npm run dev               # 管理前端（自动代理到管理后端）
-```
-
----
-
 ## 环境变量
 
 ### 必填
@@ -522,9 +445,6 @@ cd manage_frontend && npm install && npm run dev               # 管理前端（
 | `DEEPSEEK_BASE_URL` | API 基础地址 | `https://api.deepseek.com/v1` |
 | `PORT` | 后端端口 | `8686`（开发）/ `8046`（Docker） |
 | `HOST` | 绑定地址 | `0.0.0.0` |
-| `SEARXNG_BASE_URL` | SearXNG 实例地址（需自部署） | `http://localhost:8080/search` |
-| `SEARXNG_MAX_ATTEMPTS` | SearXNG 重试次数 | `3` |
-| `SEARXNG_REQUEST_TIMEOUT` | SearXNG 请求超时（秒） | `30` |
 | `VISION_MODEL` | 视觉模型标识（用于 `vision_analyze` 图片分析/OCR） | `openai/qwen-vl-max` |
 | `VISION_API_KEY` | 视觉模型 API 密钥（DeepSeek 无视觉能力，需单独配置） | — |
 | `VISION_API_BASE` | 视觉模型 API 地址 | 阿里百炼 OpenAI 兼容端点 |
