@@ -18,7 +18,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Paperclip,
-  Presentation,
   RefreshCw,
   Search,
   Square,
@@ -27,7 +26,6 @@ import {
   Upload,
   User,
   Wrench,
-  X,
   XCircle,
 } from 'lucide-react';
 import { streamChat, answerChat, uploadFile, listUploads, clearUploads, listDecks, deleteDeck, type Deck, type SSEEvent } from './api';
@@ -817,67 +815,6 @@ function DeckSidebar({
   );
 }
 
-function PreviewModal({
-  deck,
-  userId,
-  onClose,
-}: {
-  deck: Deck;
-  userId: string;
-  onClose: () => void;
-}) {
-  useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  const previewUrl = `/preview?path=${encodeURIComponent(deck.preview_path || '')}`;
-  const downloadUrl = `/download?user_id=${encodeURIComponent(userId)}&file=${encodeURIComponent(deck.name)}`;
-  return (
-    <div
-      className="fixed inset-0 z-50 bg-black/70 flex flex-col p-4 sm:p-8"
-      onClick={onClose}
-    >
-      <div
-        className="flex-1 flex flex-col bg-[#0b0f19] rounded-xl border border-slate-700 overflow-hidden max-w-6xl w-full mx-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-800 shrink-0">
-          <Presentation className="w-4 h-4 text-blue-400" />
-          <span className="text-sm text-slate-300 truncate">{deck.name}</span>
-          <div className="ml-auto flex items-center gap-2">
-            <a
-              href={downloadUrl}
-              download
-              className="flex items-center gap-1.5 text-[12px] text-slate-300 hover:text-emerald-300 bg-slate-800/60 hover:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-700/50"
-            >
-              <Download className="w-3.5 h-3.5" /> 下载
-            </a>
-            <a
-              href={previewUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-[12px] text-slate-400 hover:text-slate-200 px-2 py-1.5"
-            >
-              新窗口打开
-            </a>
-            <button
-              onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 rounded-lg"
-              title="关闭"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-        <iframe src={previewUrl} className="flex-1 w-full bg-white" title={deck.name} />
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
   const [messages, setMessages] = useState<HistoryMessage[]>([]);
   const [input, setInput] = useState('');
@@ -912,7 +849,10 @@ export default function App() {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [decksLoading, setDecksLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [previewDeck, setPreviewDeck] = useState<Deck | null>(null);
+  const openPreview = useCallback((d: Deck) => {
+    if (d.preview_path)
+      window.open(`/preview?path=${encodeURIComponent(d.preview_path)}`, '_blank', 'noopener');
+  }, []);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -945,7 +885,6 @@ export default function App() {
         await deleteDeck(d.name, userId);
         setDecks((prev) => prev.filter((x) => x.name !== d.name));
         setUploadedFiles((prev) => prev.filter((x) => x.name !== d.name));
-        setPreviewDeck((cur) => (cur?.name === d.name ? null : cur));
       } catch (err) {
         console.error('Delete file failed:', err);
       }
@@ -1352,7 +1291,7 @@ export default function App() {
         loading={decksLoading}
         userId={userId}
         onRefresh={loadDecks}
-        onPreview={setPreviewDeck}
+        onPreview={openPreview}
         onDelete={handleDeleteDeck}
       />
       <div className="flex-1 flex flex-col min-w-0">
@@ -1537,14 +1476,6 @@ export default function App() {
         </div>
       </div>
       </div>
-
-      {previewDeck && (
-        <PreviewModal
-          deck={previewDeck}
-          userId={userId}
-          onClose={() => setPreviewDeck(null)}
-        />
-      )}
     </div>
   );
 }
