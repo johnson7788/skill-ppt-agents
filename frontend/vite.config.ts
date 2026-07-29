@@ -18,6 +18,7 @@ export default defineConfig({
     watch: process.env.DISABLE_HMR === 'true' ? null : {},
     proxy: {
       '/chat': 'http://localhost:8686',
+      '/api': 'http://localhost:8686',
       '/upload': 'http://localhost:8686',
       '/uploads': 'http://localhost:8686',
       '/decks': 'http://localhost:8686',

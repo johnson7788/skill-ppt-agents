@@ -48,9 +48,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("skill_ppt_agent")
 
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse, FileResponse, HTMLResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.artifacts import InMemoryArtifactService
@@ -574,6 +574,37 @@ async def preview_html(path: str = ""):
         base_href = "/preview-static/" + html_dir + "/" if html_dir else "/preview-static/"
         html = html.replace("<head>", '<head><base href="' + base_href + '">')
     return HTMLResponse(content=html)
+
+
+# POST /api/save-deck-state — 可编辑 deck 运行时防抖上报编辑 state，烧回 index.html。
+# 运行时 POST 的是绝对路径 /api/save-deck-state（无 deck 标识），故从 Referer 的 ?path=
+# 反解出 deck 的 ppt 目录；持久化逻辑复用 dashi 现成 Node 模块（scripts/apply-deck-state.mjs）。
+@app.post("/api/save-deck-state")
+async def save_deck_state(request: Request):
+    from urllib.parse import urlparse, parse_qs
+    from app.dashi_tools import _dashi_paths
+    _, project_root = _dashi_paths()
+    output_root = os.path.normpath(os.path.join(project_root, "output"))
+    rel = (parse_qs(urlparse(request.headers.get("referer", "")).query).get("path") or [""])[0]
+    if not rel or ".." in rel or rel.startswith("/"):
+        return JSONResponse({"error": "Bad referer path"}, status_code=400)
+    ppt_dir = os.path.normpath(os.path.join(project_root, os.path.dirname(rel)))
+    if os.path.commonpath([output_root, ppt_dir]) != output_root or ppt_dir == output_root:
+        return JSONResponse({"error": "Access denied"}, status_code=403)
+    if not os.path.isfile(os.path.join(ppt_dir, "index.html")):
+        return JSONResponse({"error": "Deck not found"}, status_code=404)
+    body = await request.body()
+    script = os.path.join(project_root, "scripts", "apply-deck-state.mjs")
+    proc = await asyncio.create_subprocess_exec(
+        "node", script, ppt_dir,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    out, err = await proc.communicate(body)
+    if proc.returncode != 0:
+        return JSONResponse({"error": err.decode("utf-8", "replace")[:300] or "Save failed"}, status_code=500)
+    return Response(content=out, media_type="application/json")
 
 
 # 挂载 project 目录为静态资源（预览 HTML 的字体/css/js）
