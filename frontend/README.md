@@ -19,5 +19,5 @@ View your app in AI Studio: https://ai.studio/apps/f0a97e84-1f29-4f44-aa0c-5b4af
 3. Run the app:
    `npm run dev`
 
-   Frontend will be available at http://localhost:3585
-   Backend runs at http://localhost:8585
+   Frontend will be available at http://localhost:3686
+   Backend runs at http://localhost:8686

@@ -261,7 +261,7 @@ cp backend/env_example backend/.env
 
 # 3. 一键启动
 ./start.sh
-# 后端 :8585 + 前端 :3585
+# 后端 :8686 + 前端 :3686
 ```
 
 ### Docker 一键部署
