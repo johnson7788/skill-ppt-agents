@@ -120,6 +120,22 @@ def _artifact_url(route: str, relative_path: str) -> str:
     return f"/{route}?path={quote(relative_path, safe='/')}"
 
 
+def _copy_pptx_to_uploads(pptx_path: str, deck_name: str, user_id: str = "default_user") -> str | None:
+    """Copy exported PPTX to user uploads directory for workspace access.
+    Returns the relative path within uploads, or None on failure."""
+    try:
+        uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
+        user_dir = os.path.join(uploads_dir, user_id)
+        os.makedirs(user_dir, exist_ok=True)
+        dest = os.path.join(user_dir, f"{deck_name}.pptx")
+        shutil.copy2(pptx_path, dest)
+        _log.info("Copied PPTX to uploads: %s", dest)
+        return f"{deck_name}.pptx"
+    except Exception as exc:
+        _log.warning("Failed to copy PPTX to uploads: %s", exc)
+        return None
+
+
 def _atomic_write_json(path: str, value) -> None:
     """Publish JSON atomically after a complete UTF-8 write and fsync."""
     directory = os.path.dirname(path)
@@ -952,6 +968,10 @@ def _dashi_render_sync(goal_path: str, output_html: str = "", export_pptx: bool 
                 pptx_public_rel = _project_relative_path(proj, pptx_path)
                 if results["export_pptx"]["pptx_exists"] and pptx_public_rel:
                     results["download_url"] = _artifact_url("download", pptx_public_rel)
+                    # Copy PPTX to user uploads for workspace access
+                    workspace_path = _copy_pptx_to_uploads(pptx_path, deck_name)
+                    if workspace_path:
+                        results["workspace_path"] = workspace_path
         except Exception as e:
             results["export_pptx"] = {"error": str(e), "returncode": -1}
     
