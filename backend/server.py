@@ -87,6 +87,30 @@ runner = Runner(
     app_name=APP_NAME,
 )
 
+# 每个 user 复用同一条会话，让多轮对话共享历史。否则每次 /chat/stream 都 create_session=全新空
+# 历史，智能体记不住上一轮：例如先说"写杭州一日游 PPT"、agent 让选主题，再答"我选 theme12"时
+# 已是新会话、丢了"杭州一日游"上下文，于是又反问"你想做什么内容"。本地单用户(default_user)足够。
+# ponytail: 进程内 map，重启即清；要"新对话/清历史"再加端点，YAGNI。
+_user_sessions: dict[str, str] = {}
+
+
+async def _get_or_create_session(user_id: str):
+    sid = _user_sessions.get(user_id)
+    if sid:
+        try:
+            sess = await session_service.get_session(
+                app_name=APP_NAME, user_id=user_id, session_id=sid
+            )
+            if sess:
+                return sess
+        except Exception:
+            pass
+    sess = await session_service.create_session(
+        user_id=user_id, app_name=APP_NAME, state={"_sbkey": user_id}
+    )
+    _user_sessions[user_id] = sess.id
+    return sess
+
 NARRATOR_STATE_KEY = "_narrator_cards"
 
 
@@ -1049,9 +1073,7 @@ async def chat_stream(message: str, user_id: str = "default_user"):
 
     缓存逻辑：对相同 full_message（含文件内容）的请求直接回放已缓存的事件流，跳过 LLM 调用。
     """
-    session = await session_service.create_session(
-        user_id=user_id, app_name=APP_NAME, state={"_sbkey": user_id}
-    )
+    session = await _get_or_create_session(user_id)
     full_message = _build_message_with_files(message, user_id)
 
     # 检查缓存命中 → 快速回放缓存事件，跳过 LLM 调用
