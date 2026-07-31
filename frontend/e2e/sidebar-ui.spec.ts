@@ -8,7 +8,7 @@ import { test, expect } from '@playwright/test';
  * renders backend files and refreshes after an upload.
  */
 
-const FRONTEND = 'http://localhost:3686';
+const FRONTEND = 'http://localhost:3787';
 
 test('sidebar renders backend files and refreshes after upload', async ({ page }) => {
   await page.goto(FRONTEND);

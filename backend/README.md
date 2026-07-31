@@ -51,10 +51,10 @@ uv sync
 
 ```powershell
 uv run python server.py
-# 默认端口 8686，可用 --port 指定：uv run python server.py --port 8000
+# 默认端口 8787，可用 --port 指定：uv run python server.py --port 8000
 ```
 
-访问 `http://localhost:8686/docs` 查看 API 文档。
+访问 `http://localhost:8787/docs` 查看 API 文档。
 
 ## 沙箱镜像构建
 
@@ -96,7 +96,7 @@ uvx opensandbox-server
 
 ```powershell
 uv run python server.py
-# 默认端口 8686，可用 --port 指定
+# 默认端口 8787，可用 --port 指定
 ```
 
 ## API

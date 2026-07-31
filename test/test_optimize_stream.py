@@ -10,7 +10,7 @@
 运行方式：
     cd test
     pytest test_optimize_stream.py -v
-    MANAGE_SERVER_URL=http://localhost:8686 pytest test_optimize_stream.py -v
+    MANAGE_SERVER_URL=http://localhost:8787 pytest test_optimize_stream.py -v
 
 注意：测试会真实调用 LLM，每条约 1-5 分钟，建议单独运行：
     pytest test_optimize_stream.py::TestOptimizeStream::test_stream_structure_basic -v
@@ -29,7 +29,7 @@ from conftest import collect_sse_events, extract_full_text, get_events_by_type
 # ---------------------------------------------------------------------------
 # 配置
 # ---------------------------------------------------------------------------
-MANAGE_SERVER_URL = os.environ.get("MANAGE_SERVER_URL", "http://localhost:8686")
+MANAGE_SERVER_URL = os.environ.get("MANAGE_SERVER_URL", "http://localhost:8787")
 LOGS_DIR = Path(__file__).parent.parent / "backend" / "logs"
 TIMEOUT = 600.0  # LLM 调用可能耗时较长
 
@@ -45,7 +45,7 @@ LOG_SEARCH  = "20260617_174447_98fd803e-56c1-4bb2-a576-52db0d80.jsonl"   # 8  to
 
 @pytest.fixture(scope="module")
 async def manage_client():
-    """指向管理后端（8686）的异步 HTTP 客户端。"""
+    """指向管理后端（8787）的异步 HTTP 客户端。"""
     async with httpx.AsyncClient(base_url=MANAGE_SERVER_URL, timeout=TIMEOUT) as c:
         yield c
 

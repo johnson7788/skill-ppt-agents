@@ -6,7 +6,7 @@ export default defineConfig({
   timeout: 300_000, // 5 min — agent research takes time
   retries: 0,
   use: {
-    baseURL: 'http://localhost:3686',
+    baseURL: 'http://localhost:3787',
     headless: true,
     viewport: { width: 1280, height: 900 },
     screenshot: 'on',

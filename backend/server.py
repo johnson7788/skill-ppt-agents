@@ -1212,7 +1212,7 @@ def _sse(data: dict) -> str:
 # ---------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8686)
+    parser.add_argument("--port", type=int, default=8787)
     parser.add_argument("--host", default="0.0.0.0")
     args = parser.parse_args()
     import uvicorn

@@ -236,8 +236,8 @@ def main():
     )
     parser.add_argument(
         "--url",
-        default="http://localhost:8686",
-        help="服务端地址（默认: http://localhost:8686）。",
+        default="http://localhost:8787",
+        help="服务端地址（默认: http://localhost:8787）。",
     )
     args = parser.parse_args()
 

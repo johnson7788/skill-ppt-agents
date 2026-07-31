@@ -31,7 +31,7 @@ from conftest import (
     DEFAULT_TIMEOUT,
 )
 
-SERVER_URL = "http://localhost:8686"
+SERVER_URL = "http://localhost:8787"
 MARKER_PREFIX = f"isol_{uuid.uuid4().hex[:8]}"
 
 

@@ -10,7 +10,7 @@ import { test, expect } from '@playwright/test';
  * if preview/download serving breaks.
  */
 
-const BACKEND = 'http://localhost:8686';
+const BACKEND = 'http://localhost:8787';
 const DECK = 'deck-82f50188';
 const PREVIEW = `output/${DECK}/ppt/index.html`;
 const PPTX = `output/${DECK}/ppt/${DECK}.pptx`;

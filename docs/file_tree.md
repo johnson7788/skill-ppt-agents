@@ -70,7 +70,7 @@ skill-ppt-agents/
 ├── 🎨 frontend/                    # 前端 — React 19 + TypeScript + Vite + Tailwind CSS
 │   ├── 📄 index.html               # HTML 入口
 │   ├── 📄 package.json             # 前端依赖
-│   ├── 📄 vite.config.ts           # Vite 配置（端口 3686，代理 → :8686）
+│   ├── 📄 vite.config.ts           # Vite 配置（端口 3787，代理 → :8787）
 │   ├── 📄 tsconfig.json            # TypeScript 编译配置
 │   ├── 📄 metadata.json            # AI Studio 元数据
 │   ├── 📄 README.md                # 前端说明
