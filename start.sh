@@ -32,7 +32,7 @@ cleanup() {
 trap cleanup SIGINT SIGTERM
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  启动科研助手${NC}"
+echo -e "${GREEN}  启动科学助手${NC}"
 echo -e "${GREEN}========================================${NC}"
 
 # 启动后端
