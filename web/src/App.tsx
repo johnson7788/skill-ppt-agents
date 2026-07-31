@@ -20,8 +20,11 @@ export function App() {
   );
   const [surfaces, setSurfaces] = useState<SurfaceModel<ReactComponentImplementation>[]>([]);
   const [question, setQuestion] = useState(DEFAULT_Q);
+  const [history, setHistory] = useState<string[]>([]);
   const [intro, setIntro] = useState('');
   const [loading, setLoading] = useState(false);
+  // 每次加载生成新会话 id；后端据此区分首轮(建卡)与追问(增量更新同一张卡)
+  const sessionId = useMemo(() => Math.random().toString(36).slice(2), []);
 
   useEffect(() => {
     const s1 = processor.onSurfaceCreated(s => setSurfaces(prev => [...prev, s]));
@@ -36,9 +39,15 @@ export function App() {
     async (q: string) => {
       setLoading(true);
       setIntro('');
-      Array.from(processor.model.surfacesMap.keys()).forEach(id => processor.model.deleteSurface(id));
+      setHistory(prev => [...prev, q]);
+      // 不删 surface：首轮由后端 createSurface 建卡，追问只发差异 updateComponents
+      // → MessageProcessor 按组件 id 原地合并，卡片增量更新、不整块重画。
       try {
-        const res = await fetch('/a2a', {method: 'POST', body: q});
+        const res = await fetch('/a2a', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({question: q, session_id: sessionId}),
+        });
         const parts = (await res.json()) as Part[];
         const dataMsgs: A2uiMessage[] = [];
         for (const p of parts) {
@@ -52,7 +61,7 @@ export function App() {
         setLoading(false);
       }
     },
-    [processor],
+    [processor, sessionId],
   );
 
   // StrictMode 会双跑 effect；ref 保证初始加载只发一次，避免 createSurface 撞 id
@@ -79,7 +88,11 @@ export function App() {
         </header>
 
         <main className="chat">
-          <div className="bubble user">{question}</div>
+          {history.map((q, i) => (
+            <div className="bubble user" key={i}>
+              {q}
+            </div>
+          ))}
           {intro && <div className="bubble ai">{intro}</div>}
           {loading && <div className="bubble ai">循证医学引擎分析中…</div>}
           {surfaces.map(s => (

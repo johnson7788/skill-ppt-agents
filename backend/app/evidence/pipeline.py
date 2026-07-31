@@ -143,11 +143,15 @@ _ANSWER_SYS = (
 
 
 async def build_answer(
-    question: str, pico: dict[str, str], results: dict[str, list[dict[str, Any]]]
+    question: str,
+    pico: dict[str, str],
+    results: dict[str, list[dict[str, Any]]],
+    context: str = "",
 ) -> EvidenceAnswer:
     refs = build_candidates(results)
     user = (
-        f"用户问题：{question}\n"
+        f"{context}"
+        f"当前问题：{question}\n"
         f"PICO：P={pico['P']} I={pico['I']} C={pico['C']} O={pico['O']}\n\n"
         f"候选文献：\n{_candidates_prompt(refs, results)}"
     )
@@ -181,10 +185,17 @@ def assemble(
     )
 
 
-async def answer_question(question: str) -> EvidenceAnswer:
-    pico = await extract_pico(question)
+async def answer_question(
+    question: str, history: list[str] | None = None
+) -> EvidenceAnswer:
+    """M3：history=此前的追问列表。有则综合上下文检索+生成，卡片随对话演进。"""
+    context = ""
+    if history:
+        prior = "\n".join(f"- {h}" for h in history)
+        context = f"对话背景（此前的追问，需综合考虑并在已有结论上补充/修订）：\n{prior}\n\n"
+    pico = await extract_pico(context + question)
     results = await run_search(pico)
-    return await build_answer(question, pico, results)
+    return await build_answer(question, pico, results, context)
 
 
 def _check() -> None:

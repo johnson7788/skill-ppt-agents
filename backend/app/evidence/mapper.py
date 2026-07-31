@@ -24,9 +24,24 @@ CATALOG_ID = "https://evidence-a2ui.local/catalog/v1"
 SURFACE_ID = "evidence-card"
 
 
-def evidence_to_a2ui(
-    answer: EvidenceAnswer, surface_id: str = SURFACE_ID
-) -> list[dict[str, Any]]:
+def create_surface_msg(surface_id: str = SURFACE_ID) -> dict[str, Any]:
+    return {"version": VERSION,
+            "createSurface": {"surfaceId": surface_id, "catalogId": CATALOG_ID}}
+
+
+def update_components_msg(
+    components: list[dict[str, Any]], surface_id: str = SURFACE_ID
+) -> dict[str, Any]:
+    return {"version": VERSION,
+            "updateComponents": {"surfaceId": surface_id, "components": components}}
+
+
+def evidence_components(answer: EvidenceAnswer) -> list[dict[str, Any]]:
+    """把 EvidenceAnswer 拼成扁平组件列表（不含 surface 消息壳）。
+
+    M3 增量更新用它：追问时对比前后组件列表，只 updateComponents 差异部分，
+    surface 不重建、卡片不整块重画。组件 id 确定性 → 同 id 原地更新。
+    """
     comps: list[dict[str, Any]] = []
 
     def add(comp: dict[str, Any]) -> str:
@@ -116,12 +131,14 @@ def evidence_to_a2ui(
     add({"id": "root_col", "component": "Column", "children": body, "align": "stretch"})
     add({"id": "root", "component": "Card", "child": "root_col"})
 
-    return [
-        {"version": VERSION,
-         "createSurface": {"surfaceId": surface_id, "catalogId": CATALOG_ID}},
-        {"version": VERSION,
-         "updateComponents": {"surfaceId": surface_id, "components": comps}},
-    ]
+    return comps
+
+
+def evidence_to_a2ui(
+    answer: EvidenceAnswer, surface_id: str = SURFACE_ID
+) -> list[dict[str, Any]]:
+    comps = evidence_components(answer)
+    return [create_surface_msg(surface_id), update_components_msg(comps, surface_id)]
 
 
 def _check(answer: EvidenceAnswer) -> None:
