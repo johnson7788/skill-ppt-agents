@@ -18,7 +18,7 @@ export default defineConfig({
   webServer: [
     {
       command: 'EVIDENCE_MOCK=1 backend/.venv/bin/python backend/server_evidence.py',
-      cwd: '../..', // repo 根（config 在 web/e2e/）
+      cwd: '../../..', // repo 根（config 在 frontend/web/e2e/）
       url: 'http://localhost:8700/',
       reuseExistingServer: false,
       timeout: 60_000,
