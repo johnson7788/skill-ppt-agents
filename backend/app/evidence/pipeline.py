@@ -17,16 +17,17 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import pathlib
 from typing import Any
 
 from .schema import Caution, Conclusion, ConclusionPoint, EvidenceAnswer, Reference
 
-# medical-pico-search skill 脚本路径（M4 vendor 进本 repo 前先用绝对路径，可 env 覆盖）
-PICO_SEARCH_SCRIPT = os.environ.get(
-    "PICO_SEARCH_SCRIPT",
-    "/Users/admin/yifu/agno_medical_science/backend/medical_skills"
-    "/medical-pico-search/scripts/infoxmed_search.py",
+# medical-pico-search skill 脚本（M4 已 vendor 进本 repo，默认走仓内相对路径，可 env 覆盖）
+_VENDORED = (
+    pathlib.Path(__file__).parent
+    / "skills" / "medical-pico-search" / "scripts" / "infoxmed_search.py"
 )
+PICO_SEARCH_SCRIPT = os.environ.get("PICO_SEARCH_SCRIPT", str(_VENDORED))
 # 检索四类，按证据强度排序；候选文献总数上限（卡片放不下太多）
 _CATEGORIES = ["chinese_guideline", "english_guideline", "systematic_meta", "rct"]
 _MAX_CANDIDATES = 6

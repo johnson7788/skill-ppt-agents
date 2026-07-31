@@ -40,6 +40,11 @@ app.add_middleware(
 _SESSIONS: dict[str, dict] = {}
 
 
+@app.get("/")
+async def health():
+    return {"ok": True}
+
+
 async def _retrieve(question: str, history: list[str]) -> EvidenceAnswer:
     if os.environ.get("EVIDENCE_MOCK") == "1":
         return EvidenceAnswer.model_validate(json.loads(FIXTURE.read_text("utf-8")))

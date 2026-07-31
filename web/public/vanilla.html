@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>循证卡 · Vanilla 渲染器</title>
+  <!--
+    A2UI 多端渲染 demo（M4）：这一页不用 React，用手写 vanilla JS 解释 A2UI 组件树。
+    它和 React 版拉取的是完全相同的 /a2a A2UI 声明式消息 —— 证明同一份 UI 意图
+    可被不同客户端栈各自渲染（A2UI 的核心卖点：像数据一样可移植）。
+  -->
+  <style>
+    body { margin: 0; font-family: -apple-system, "PingFang SC", sans-serif; background: #ededed; color: #1a1a1a; }
+    .wrap { max-width: 480px; margin: 0 auto; padding: 16px; }
+    .badge-tag { display:inline-block; font-size:11px; padding:1px 6px; border-radius:4px; background:#dbeafe; color:#1d4ed8; margin-bottom:8px; }
+    .intro { background:#fff; border-radius:8px; padding:10px 12px; margin-bottom:12px; line-height:1.5; }
+    .v-card { background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+    .v-col { display:flex; flex-direction:column; gap:10px; }
+    .v-row { display:flex; align-items:center; gap:8px; }
+    .v-text { padding:0 16px; line-height:1.5; font-size:15px; }
+    .v-text.h5 { color:#0f766e; font-weight:700; font-size:15px; }
+    .v-text.caption { color:#9ca3af; font-size:13px; }
+    .v-div { border:none; border-top:1px solid #eef0f2; margin:2px 0; }
+    .v-btn { color:#16a34a; background:none; border:none; padding:0 16px; font-size:13px; cursor:pointer; text-align:left; }
+    .ev-header { background:linear-gradient(90deg,#0f9d76,#14b8a6); color:#fff; padding:14px 16px; display:flex; align-items:baseline; gap:10px; }
+    .ev-header-title { font-weight:700; font-size:16px; }
+    .ev-header-sub { font-size:12px; opacity:.85; margin-left:auto; }
+    .ev-badge { display:inline-block; color:#fff; font-weight:700; font-size:13px; padding:4px 12px; border-radius:6px; margin-left:16px; }
+    .ev-caution { margin:0 16px; padding:10px 12px; background:#fff7ed; border-radius:8px; line-height:1.6; font-size:14px; color:#7c2d12; }
+    .ev-caution-hl { display:inline-block; background:#fee2e2; color:#dc2626; font-weight:700; padding:1px 6px; border-radius:4px; margin-right:6px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <span class="badge-tag">Vanilla JS 渲染器（非 React）</span>
+    <div class="intro" id="intro">加载中…</div>
+    <div id="card"></div>
+  </div>
+  <script>
+    const LEVEL = { A: '#16a34a', B: '#2563eb', C: '#d97706', D: '#6b7280' };
+    const esc = s => (s || '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    const md = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
+
+    function render(id, byId) {
+      const c = byId[id];
+      if (!c) return document.createComment('missing ' + id);
+      switch (c.component) {
+        case 'Card': { const d = el('div', 'v-card'); if (c.child) d.appendChild(render(c.child, byId)); return d; }
+        case 'Column': { const d = el('div', 'v-col'); (c.children || []).forEach(k => d.appendChild(render(k, byId))); return d; }
+        case 'Row': { const d = el('div', 'v-row'); (c.children || []).forEach(k => d.appendChild(render(k, byId))); return d; }
+        case 'Text': { const d = el('div', 'v-text ' + (c.variant || '')); d.innerHTML = md(c.text); return d; }
+        case 'Divider': return el('hr', 'v-div');
+        case 'Button': { const b = el('button', 'v-btn'); const ch = byId[c.child]; b.innerHTML = md(ch ? ch.text : ''); b.onclick = () => { const u = c.action && c.action.event && c.action.event.context && c.action.event.context.url; if (u) window.open(u, '_blank'); }; return b; }
+        case 'EvidenceHeader': { const d = el('div', 'ev-header'); const t = el('span', 'ev-header-title'); t.textContent = c.title; const s = el('span', 'ev-header-sub'); s.textContent = c.subtitle; d.append(t, s); return d; }
+        case 'EvidenceBadge': { const s = el('span', 'ev-badge'); s.style.background = LEVEL[c.level] || LEVEL.D; s.textContent = c.level + ' 级证据'; return s; }
+        case 'CautionBox': { const d = el('div', 'ev-caution'); if (c.highlight) { const h = el('span', 'ev-caution-hl'); h.textContent = c.highlight; d.appendChild(h); } const sp = el('span'); sp.textContent = c.text; d.appendChild(sp); return d; }
+        default: { const d = el('div'); d.textContent = '[' + c.component + ']'; return d; }
+      }
+    }
+
+    async function main() {
+      const res = await fetch('/a2a', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: '一直打喷嚏，可以吃氯雷他定吗？', session_id: 'vanilla-' + Math.random().toString(36).slice(2) }),
+      });
+      const parts = await res.json();
+      const byId = {};
+      let intro = '', rootId = null;
+      for (const p of parts) {
+        if (p.kind === 'text') intro = p.text;
+        if (p.kind === 'data' && p.data.updateComponents) {
+          for (const comp of p.data.updateComponents.components) {
+            byId[comp.id] = comp;
+            if (comp.id === 'root') rootId = comp.id;
+          }
+        }
+      }
+      document.getElementById('intro').textContent = intro || '（无引导语）';
+      const host = document.getElementById('card');
+      host.innerHTML = '';
+      if (rootId) host.appendChild(render(rootId, byId));
+      else host.textContent = '未收到卡片数据';
+    }
+    main().catch(e => { document.getElementById('intro').textContent = '出错了：' + e.message; });
+  </script>
+</body>
+</html>
