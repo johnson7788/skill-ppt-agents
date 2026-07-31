@@ -15,65 +15,93 @@ body {
   flex-direction: column;
   background: #ededed;
 }
+
+/* ── 顶部栏 ── */
 .topbar {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 16px;
+  padding: 12px 14px;
   background: #f7f7f7;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid #e6e6e6;
   position: sticky;
   top: 0;
+  z-index: 5;
+}
+.topbar .back,
+.topbar .more {
+  color: #6b7280;
+  font-size: 20px;
+  cursor: pointer;
+  user-select: none;
+}
+.topbar .more {
+  margin-left: auto;
 }
 .avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
   background: linear-gradient(135deg, #f7c948, #16a34a);
+  flex-shrink: 0;
 }
 .title {
   font-weight: 600;
+  font-size: 16px;
 }
 .tags {
   display: flex;
   gap: 6px;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 .tag {
   font-size: 11px;
-  padding: 1px 6px;
+  padding: 1px 7px;
   border-radius: 4px;
+  line-height: 1.5;
 }
 .tag-doc {
-  background: #fef3c7;
-  color: #b45309;
+  background: #fde68a;
+  color: #92400e;
 }
 .tag-ev {
   background: #d1fae5;
   color: #047857;
 }
+
+/* ── 对话区 ── */
 .chat {
   flex: 1;
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 .bubble {
-  max-width: 85%;
-  padding: 10px 12px;
-  border-radius: 8px;
-  line-height: 1.5;
+  max-width: 82%;
+  padding: 11px 13px;
+  border-radius: 10px;
+  line-height: 1.6;
   font-size: 15px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 .bubble.user {
   align-self: flex-end;
-  background: #95ec69;
+  background: #fff;
 }
 .bubble.ai {
   align-self: flex-start;
   background: #fff;
 }
+.bubble.ai p {
+  margin: 0;
+}
+.bubble.ai strong {
+  color: #0f9d76;
+  font-weight: 700;
+}
+
+/* ── 循证卡 ── */
 .card-wrap {
   align-self: stretch;
   /* 主题化 A2UI basic 组件（它们只认 CSS 变量） */
@@ -82,38 +110,85 @@ body {
   --a2ui-color-surface: #fff;
   --a2ui-color-on-surface: #374151;
   --a2ui-color-border: #eef0f2;
-  --a2ui-spacing-m: 10px;
-  --a2ui-column-gap: 10px;
+  --a2ui-spacing-m: 0px;
+  --a2ui-column-gap: 8px;
 }
 .card-wrap .a2ui-card {
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+  padding-bottom: 14px;
 }
-/* 正文/要点/文献留出左右内边距（header/badge 自带满宽/内距） */
-.card-wrap .a2uiText,
-.card-wrap .ev-badge,
-.card-wrap [class*='a2ui'] > .a2uiText {
+/* 干掉 markdown 块级元素（h5/p/ol/li）的浏览器默认外边距——间距全由 flex gap 控制 */
+.card-wrap h5,
+.card-wrap p,
+.card-wrap ol,
+.card-wrap ul {
+  margin: 0;
+}
+/* 正文/小标题/文献左右留白（header 与分割线满宽） */
+.card-wrap .h5,
+.card-wrap .body,
+.card-wrap .a2ui-card em {
   padding-left: 16px;
   padding-right: 16px;
 }
 /* 章节小标题（h5）绿色加粗 */
-.card-wrap .a2uiText.h5 {
+.card-wrap .h5 h5 {
   color: #0f766e;
   font-weight: 700;
   font-size: 15px;
 }
-.card-wrap .a2uiText.caption {
+/* 结论主句加粗深色 */
+.card-wrap .body strong {
+  font-weight: 700;
+  color: #1f2937;
+}
+/* caption（basis / 文献元信息）灰色、去斜体 */
+.card-wrap .a2ui-card em {
+  font-style: normal;
   color: #9ca3af;
+  font-size: 13px;
+}
+/* 结论要点标签（如「适用年龄」）→ 黄色高亮药丸。
+   仅命中嵌套在要点 Column 内的 strong（`根>行>.body strong`），
+   结论主句的 strong 在 `根>.body` 更浅一层，不受影响。 */
+.card-wrap .a2ui-card > div > div > .body strong {
+  background: #fef3c7;
+  color: #92400e;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 5px;
+}
+/* 参考文献：有序列表当编号，标题加粗，编号用绿色 marker */
+.card-wrap ol {
+  list-style-position: inside;
+  padding: 0;
+}
+.card-wrap li {
+  font-weight: 700;
+  color: #1f2937;
+}
+.card-wrap li::marker {
+  color: #0f9d76;
+  font-weight: 700;
+}
+/* 分割线：A2UI Divider 渲染为空 div，给它一条细线 */
+.card-wrap .a2ui-card > div > div:empty {
+  border-top: 1px solid #eef0f2;
+  margin: 8px 16px;
 }
 /* 参考文献「查看原文」按钮 → 绿色文字链接 */
 .card-wrap button {
   color: #16a34a;
   background: none;
   border: none;
-  padding: 0 16px;
+  padding: 0;
   font-size: 13px;
   cursor: pointer;
+}
+.card-wrap button .body {
+  padding-left: 16px;
 }
 
 /* ── Smart Wrapper 组件 ── */
@@ -122,8 +197,16 @@ body {
   color: #fff;
   padding: 14px 16px;
   display: flex;
-  align-items: baseline;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
+}
+.ev-header::before {
+  content: "🔬";
+  font-size: 15px;
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  padding: 2px 5px;
+  line-height: 1;
 }
 .ev-header-title {
   font-weight: 700;
@@ -139,16 +222,18 @@ body {
   color: #fff;
   font-weight: 700;
   font-size: 13px;
-  padding: 4px 12px;
-  border-radius: 6px;
-  margin-left: 16px;
+  padding: 5px 14px;
+  border-radius: 7px;
+  margin: 12px 10px 12px 16px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .ev-caution {
   margin: 0 16px;
   padding: 10px 12px;
   background: #fff7ed;
   border-radius: 8px;
-  line-height: 1.6;
+  line-height: 1.7;
   font-size: 14px;
   color: #7c2d12;
 }
@@ -157,33 +242,36 @@ body {
   background: #fee2e2;
   color: #dc2626;
   font-weight: 700;
-  padding: 1px 6px;
+  padding: 1px 7px;
   border-radius: 4px;
-  margin-right: 6px;
+  margin-right: 4px;
 }
+
+/* ── 输入栏 ── */
 .composer {
   display: flex;
   gap: 8px;
   padding: 10px 16px;
   background: #f7f7f7;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid #e6e6e6;
   position: sticky;
   bottom: 0;
 }
 .composer input {
   flex: 1;
   border: 1px solid #ddd;
-  border-radius: 6px;
-  padding: 8px 10px;
+  border-radius: 8px;
+  padding: 9px 12px;
   font-size: 15px;
 }
 .composer button {
   border: none;
   background: #16a34a;
   color: #fff;
-  border-radius: 6px;
-  padding: 8px 16px;
+  border-radius: 8px;
+  padding: 9px 18px;
   cursor: pointer;
+  font-size: 15px;
 }
 .composer button:disabled {
   opacity: 0.5;

@@ -51,7 +51,7 @@ export function App() {
         const parts = (await res.json()) as Part[];
         const dataMsgs: A2uiMessage[] = [];
         for (const p of parts) {
-          if (p.kind === 'text' && p.text) setIntro(p.text);
+          if (p.kind === 'text' && p.text) setIntro(await renderMarkdown(p.text));
           if (p.kind === 'data' && p.data) dataMsgs.push(p.data);
         }
         processor.processMessages(dataMsgs);
@@ -77,6 +77,7 @@ export function App() {
     <MarkdownContext.Provider value={renderMarkdown}>
       <div className="app">
         <header className="topbar">
+          <span className="back">‹</span>
           <span className="avatar" />
           <div>
             <div className="title">小团健康管家</div>
@@ -85,6 +86,7 @@ export function App() {
               <span className="tag tag-ev">循证支持</span>
             </div>
           </div>
+          <span className="more">⋯</span>
         </header>
 
         <main className="chat">
@@ -93,7 +95,7 @@ export function App() {
               {q}
             </div>
           ))}
-          {intro && <div className="bubble ai">{intro}</div>}
+          {intro && <div className="bubble ai" dangerouslySetInnerHTML={{__html: intro}} />}
           {loading && <div className="bubble ai">循证医学引擎分析中…</div>}
           {surfaces.map(s => (
             <div className="card-wrap" key={s.id}>

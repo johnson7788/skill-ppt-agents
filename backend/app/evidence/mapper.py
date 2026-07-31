@@ -72,7 +72,7 @@ def evidence_components(answer: EvidenceAnswer) -> list[dict[str, Any]]:
     body.append("badge_row")
 
     # 循证结论
-    text("concl_h", "循证结论", "h5")
+    text("concl_h", "📋 循证结论", "h5")
     body.append("concl_h")
     cite = "".join(f" [{c}]" for c in answer.conclusion.citations)
     text("concl_subject", f"**{answer.conclusion.subject}**{cite}")
@@ -89,7 +89,7 @@ def evidence_components(answer: EvidenceAnswer) -> list[dict[str, Any]]:
     # 注意事项
     if answer.cautions:
         body.append(divider("d_caution"))
-        text("caution_h", "注意事项", "h5")
+        text("caution_h", "⚠️ 注意事项", "h5")
         body.append("caution_h")
         caution_ids: list[str] = []
         for i, c in enumerate(answer.cautions):
@@ -104,7 +104,7 @@ def evidence_components(answer: EvidenceAnswer) -> list[dict[str, Any]]:
     # 参考文献
     if answer.references:
         body.append(divider("d_ref"))
-        text("ref_h", f"参考文献（共 {len(answer.references)} 篇）", "h5")
+        text("ref_h", f"📚 参考文献（共 {len(answer.references)} 篇）", "h5")
         body.append("ref_h")
         for r in answer.references:
             title = text(f"ref_{r.id}_title", f"{r.id}. {r.title}")
