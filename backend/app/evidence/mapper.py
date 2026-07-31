@@ -18,7 +18,9 @@ from typing import Any
 from .schema import EvidenceAnswer
 
 VERSION = "v0.9"
-CATALOG_ID = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+# 合并了 basic + 3 个 Smart Wrapper(EvidenceHeader/EvidenceBadge/CautionBox) 的自定义
+# catalog，前端 web/src/catalog.tsx 的 EVIDENCE_CATALOG_ID 必须与此一致。
+CATALOG_ID = "https://evidence-a2ui.local/catalog/v1"
 SURFACE_ID = "evidence-card"
 
 
@@ -42,13 +44,13 @@ def evidence_to_a2ui(
 
     body: list[str] = []
 
-    # 标题条
-    text("hdr_title", "循证决策支持", "h4")
-    text("hdr_sub", "Powered by Evidence Engine", "caption")
-    body += ["hdr_title", "hdr_sub", divider("d_hdr")]
+    # 标题条（Smart Wrapper：绿色渐变头）
+    add({"id": "hdr", "component": "EvidenceHeader",
+         "title": "循证决策支持", "subtitle": "Powered by Evidence Engine"})
+    body.append("hdr")
 
-    # 证据等级徽章 + 依据
-    text("badge", f"{answer.evidenceLevel} 级证据", "h5")
+    # 证据等级徽章（Smart Wrapper：彩色药丸） + 依据
+    add({"id": "badge", "component": "EvidenceBadge", "level": answer.evidenceLevel})
     text("basis", answer.basis, "caption")
     add({"id": "badge_row", "component": "Row", "children": ["badge", "basis"],
          "justify": "start", "align": "center"})
@@ -76,8 +78,9 @@ def evidence_to_a2ui(
         body.append("caution_h")
         caution_ids: list[str] = []
         for i, c in enumerate(answer.cautions):
-            hl = f"**{c.highlight}** " if c.highlight else ""
-            cid = text(f"caution_{i}", f"{hl}{c.text}")
+            cid = f"caution_{i}"
+            add({"id": cid, "component": "CautionBox",
+                 "highlight": c.highlight or "", "text": c.text})
             caution_ids.append(cid)
         add({"id": "caution_col", "component": "Column",
              "children": caution_ids, "align": "start"})

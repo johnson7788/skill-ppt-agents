@@ -76,10 +76,90 @@ body {
 }
 .card-wrap {
   align-self: stretch;
-  background: #fff;
-  border-radius: 10px;
-  padding: 4px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  /* 主题化 A2UI basic 组件（它们只认 CSS 变量） */
+  --a2ui-card-background: #fff;
+  --a2ui-card-padding: 0;
+  --a2ui-color-surface: #fff;
+  --a2ui-color-on-surface: #374151;
+  --a2ui-color-border: #eef0f2;
+  --a2ui-spacing-m: 10px;
+  --a2ui-column-gap: 10px;
+}
+.card-wrap .a2ui-card {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+/* 正文/要点/文献留出左右内边距（header/badge 自带满宽/内距） */
+.card-wrap .a2uiText,
+.card-wrap .ev-badge,
+.card-wrap [class*='a2ui'] > .a2uiText {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+/* 章节小标题（h5）绿色加粗 */
+.card-wrap .a2uiText.h5 {
+  color: #0f766e;
+  font-weight: 700;
+  font-size: 15px;
+}
+.card-wrap .a2uiText.caption {
+  color: #9ca3af;
+}
+/* 参考文献「查看原文」按钮 → 绿色文字链接 */
+.card-wrap button {
+  color: #16a34a;
+  background: none;
+  border: none;
+  padding: 0 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ── Smart Wrapper 组件 ── */
+.ev-header {
+  background: linear-gradient(90deg, #0f9d76, #14b8a6);
+  color: #fff;
+  padding: 14px 16px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.ev-header-title {
+  font-weight: 700;
+  font-size: 16px;
+}
+.ev-header-sub {
+  font-size: 12px;
+  opacity: 0.85;
+  margin-left: auto;
+}
+.ev-badge {
+  display: inline-block;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  margin-left: 16px;
+}
+.ev-caution {
+  margin: 0 16px;
+  padding: 10px 12px;
+  background: #fff7ed;
+  border-radius: 8px;
+  line-height: 1.6;
+  font-size: 14px;
+  color: #7c2d12;
+}
+.ev-caution-hl {
+  display: inline-block;
+  background: #fee2e2;
+  color: #dc2626;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
 }
 .composer {
   display: flex;

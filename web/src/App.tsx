@@ -1,7 +1,8 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {A2uiSurface, basicCatalog, MarkdownContext, ReactComponentImplementation} from '@a2ui/react/v0_9';
+import {A2uiSurface, MarkdownContext, ReactComponentImplementation} from '@a2ui/react/v0_9';
 import {MessageProcessor, SurfaceModel, A2uiMessage} from '@a2ui/web_core/v0_9';
 import {renderMarkdown} from '@a2ui/markdown-it';
+import {evidenceCatalog} from './catalog';
 import './index.css';
 
 const DEFAULT_Q = '一直打喷嚏，可以吃氯雷他定吗？';
@@ -14,7 +15,7 @@ interface Part {
 
 export function App() {
   const processor = useMemo(
-    () => new MessageProcessor([basicCatalog], action => console.log('action:', action)),
+    () => new MessageProcessor([evidenceCatalog], action => console.log('action:', action)),
     [],
   );
   const [surfaces, setSurfaces] = useState<SurfaceModel<ReactComponentImplementation>[]>([]);
