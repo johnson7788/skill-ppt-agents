@@ -1,0 +1,39 @@
+{
+  "question": "一直打喷嚏，可以吃氯雷他定吗？",
+  "intro": "关于氯雷他定的使用，以下是根据循证医学引擎的分析：",
+  "evidenceLevel": "A",
+  "basis": "基于 WHO 过敏指南 · 多项 RCT",
+  "conclusion": {
+    "subject": "氯雷他定（开瑞坦）为第二代抗组胺药",
+    "citations": [1],
+    "points": [
+      { "label": "适用年龄", "text": "2 岁以上儿童可用" },
+      { "text": "儿童剂量：体重≤30kg，5mg/日；>30kg，10mg/日" },
+      { "text": "起效快（1-2h），无嗜睡副作用" }
+    ]
+  },
+  "cautions": [
+    {
+      "highlight": "建议先明确诊断",
+      "text": "如为过敏性鼻炎，可联合鼻用激素。如症状持续超过 2 周，建议就医。"
+    }
+  ],
+  "references": [
+    {
+      "id": 1,
+      "title": "WHO Guidelines on Allergic Rhinitis Management",
+      "source": "WHO",
+      "year": 2024,
+      "isbn": "978-92-4-008XXXX",
+      "url": "https://www.who.int/publications/allergic-rhinitis"
+    },
+    {
+      "id": 2,
+      "title": "Comparative Efficacy of Second-Generation Antihistamines",
+      "source": "Allergy",
+      "year": 2024,
+      "volume": "79(3): 456-470",
+      "pmid": "38000000"
+    }
+  ]
+}
