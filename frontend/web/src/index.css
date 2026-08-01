@@ -101,6 +101,56 @@ body {
   font-weight: 700;
 }
 
+/* ── 思考气泡（流式 thinking） ── */
+.thinking {
+  align-self: flex-start;
+  max-width: 82%;
+  background: #f4f6f8;
+  border: 1px solid #e6eaee;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #6b7280;
+}
+.thinking-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+  color: #4b5563;
+}
+.thinking.collapsed .thinking-head {
+  cursor: pointer;
+}
+.thinking-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #0f9d76;
+  animation: thinking-pulse 1s ease-in-out infinite;
+}
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+.thinking-body {
+  margin-top: 7px;
+  white-space: pre-wrap;
+  line-height: 1.55;
+  color: #8a929c;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.thinking-steps {
+  margin-top: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.thinking-step {
+  color: #0f9d76;
+}
+
 /* ── 循证卡 ── */
 .card-wrap {
   align-self: stretch;

@@ -58,6 +58,35 @@ async def _chat_json(system: str, user: str) -> dict[str, Any]:
     return json.loads(resp.choices[0].message.content)
 
 
+async def _chat_json_stream(system: str, user: str):
+    """流式版：async generator，先 yield ("thinking", delta)（模型 reasoning_content），
+    最后 yield ("result", 解析后的 dict)。正文 content 与 reasoning 走两条独立通道——
+    reasoning 逐字流出做「思考」，content 累加齐了整体 json.loads（json_object 需完整）。
+    模型不返回 reasoning_content（非推理模型）时自然只出 result，前端退化为阶段旁白。
+    """
+    import litellm
+
+    model, key = _model_and_key()
+    resp = await litellm.acompletion(
+        model=model,
+        api_key=key,
+        temperature=0,
+        stream=True,
+        response_format={"type": "json_object"},
+        messages=[{"role": "system", "content": system},
+                  {"role": "user", "content": user}],
+    )
+    buf: list[str] = []
+    async for chunk in resp:
+        delta = chunk.choices[0].delta
+        rc = getattr(delta, "reasoning_content", None)
+        if rc:
+            yield ("thinking", rc)
+        if getattr(delta, "content", None):
+            buf.append(delta.content)
+    yield ("result", json.loads("".join(buf)))
+
+
 # --------------------------------------------------------------------------- 1
 _PICO_SYS = (
     "你是循证医学检索助手。从用户的临床问题中抽取 PICO 四要素，只输出 JSON："
@@ -160,6 +189,30 @@ async def build_answer(
     return assemble(question, refs, d)
 
 
+async def build_answer_stream(
+    question: str,
+    pico: dict[str, str],
+    results: dict[str, list[dict[str, Any]]],
+    context: str = "",
+):
+    """流式版 build_answer：先 yield {"kind":"thinking","delta":...}（模型 reasoning），
+    最后 yield {"kind":"answer","answer": EvidenceAnswer}。正文 JSON 一次性解析。"""
+    refs = build_candidates(results)
+    user = (
+        f"{context}"
+        f"当前问题：{question}\n"
+        f"PICO：P={pico['P']} I={pico['I']} C={pico['C']} O={pico['O']}\n\n"
+        f"候选文献：\n{_candidates_prompt(refs, results)}"
+    )
+    d: dict[str, Any] = {}
+    async for kind, payload in _chat_json_stream(_ANSWER_SYS, user):
+        if kind == "thinking":
+            yield {"kind": "thinking", "delta": payload}
+        else:
+            d = payload
+    yield {"kind": "answer", "answer": assemble(question, refs, d)}
+
+
 def assemble(
     question: str, refs: list[Reference], llm: dict[str, Any]
 ) -> EvidenceAnswer:
@@ -197,6 +250,23 @@ async def answer_question(
     pico = await extract_pico(context + question)
     results = await run_search(pico)
     return await build_answer(question, pico, results, context)
+
+
+async def stream_answer(question: str, history: list[str] | None = None):
+    """流式版 answer_question：逐阶段 yield 事件（见 doc/stream_plan.md §2 Phase1+2）。
+    事件 dict 的 kind ∈ {status, thinking, answer}；上层（server）再映射成 SSE/A2UI。
+    """
+    context = ""
+    if history:
+        prior = "\n".join(f"- {h}" for h in history)
+        context = f"对话背景（此前的追问，需综合考虑并在已有结论上补充/修订）：\n{prior}\n\n"
+    yield {"kind": "status", "text": "抽取临床要素（PICO）…"}
+    pico = await extract_pico(context + question)
+    yield {"kind": "status", "text": "检索指南 / Meta 分析 / RCT…"}
+    results = await run_search(pico)
+    yield {"kind": "status", "text": "综合证据、生成循证结论…"}
+    async for evt in build_answer_stream(question, pico, results, context):
+        yield evt
 
 
 def _check() -> None:

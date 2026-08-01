@@ -19,6 +19,7 @@ import pathlib
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from app.evidence import EvidenceAnswer, evidence_to_a2ui  # noqa: F401 (兼容导出)
 from app.evidence.mapper import (
@@ -26,7 +27,7 @@ from app.evidence.mapper import (
     evidence_components,
     update_components_msg,
 )
-from app.evidence.pipeline import answer_question
+from app.evidence.pipeline import stream_answer
 
 FIXTURE = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "loratadine.json"
 
@@ -45,10 +46,51 @@ async def health():
     return {"ok": True}
 
 
-async def _retrieve(question: str, history: list[str]) -> EvidenceAnswer:
+def _sse(evt: dict) -> str:
+    return f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
+
+
+async def _retrieve_stream(question: str, history: list[str]):
+    """产 pipeline 事件：{"kind":"status"/"thinking"/"answer"}。
+    EVIDENCE_MOCK=1 时不触网，发两条 status 旁白后直接给 fixture answer。"""
     if os.environ.get("EVIDENCE_MOCK") == "1":
-        return EvidenceAnswer.model_validate(json.loads(FIXTURE.read_text("utf-8")))
-    return await answer_question(question, history)
+        yield {"kind": "status", "text": "抽取临床要素（PICO）…"}
+        yield {"kind": "status", "text": "检索指南 / Meta 分析 / RCT…"}
+        yield {"kind": "status", "text": "综合证据、生成循证结论…"}
+        ans = EvidenceAnswer.model_validate(json.loads(FIXTURE.read_text("utf-8")))
+        yield {"kind": "answer", "answer": ans}
+        return
+    async for evt in stream_answer(question, history):
+        yield evt
+
+
+async def _a2a_events(question: str, sid: str):
+    """把 pipeline 事件流映射成 SSE 事件流（见 doc/stream_plan.md §1）。"""
+    sess = _SESSIONS.get(sid)
+    history: list[str] = sess["questions"] if sess else []
+    try:
+        async for evt in _retrieve_stream(question, history):
+            kind = evt["kind"]
+            if kind == "status":
+                yield _sse({"kind": "status", "text": evt["text"]})
+            elif kind == "thinking":
+                yield _sse({"kind": "thinking", "delta": evt["delta"]})
+            elif kind == "answer":
+                answer: EvidenceAnswer = evt["answer"]
+                comps = evidence_components(answer)
+                yield _sse({"kind": "text", "text": answer.intro})
+                if sess is None:
+                    yield _sse({"kind": "data", "data": create_surface_msg()})
+                    yield _sse({"kind": "data", "data": update_components_msg(comps)})
+                else:
+                    prev = {c["id"]: c for c in sess["comps"]}
+                    diff = [c for c in comps if prev.get(c["id"]) != c]
+                    yield _sse({"kind": "data", "data": update_components_msg(diff)})
+                # 会话态在拿到完整 comps 后写入，供追问 diff
+                _SESSIONS[sid] = {"comps": comps, "questions": history + [question]}
+    except Exception as e:  # noqa: BLE001 — 边界兜底，任何失败都给友好提示，不留死流
+        yield _sse({"kind": "error", "text": f"抱歉，暂时无法完成循证分析：{e}"})
+    yield _sse({"kind": "done"})
 
 
 @app.post("/a2a")
@@ -56,28 +98,9 @@ async def a2a(request: Request):
     data = await request.json()
     question = str(data.get("question", "")).strip()
     sid = str(data.get("session_id") or "default")
-    sess = _SESSIONS.get(sid)
-    history: list[str] = sess["questions"] if sess else []
-
-    try:
-        answer = await _retrieve(question, history)
-    except Exception as e:  # noqa: BLE001 — 边界兜底，任何失败都给用户友好提示
-        return [{"kind": "text", "text": f"抱歉，暂时无法完成循证分析：{e}"}]
-
-    comps = evidence_components(answer)
-    parts: list[dict] = [{"kind": "text", "text": answer.intro}]
-    if sess is None:
-        # 首轮：建 surface + 全量组件
-        parts.append({"kind": "data", "data": create_surface_msg()})
-        parts.append({"kind": "data", "data": update_components_msg(comps)})
-    else:
-        # 追问：只发差异组件（含因子/子节点变化的 root_col），surface 不重建
-        prev = {c["id"]: c for c in sess["comps"]}
-        diff = [c for c in comps if prev.get(c["id"]) != c]
-        parts.append({"kind": "data", "data": update_components_msg(diff)})
-
-    _SESSIONS[sid] = {"comps": comps, "questions": history + [question]}
-    return parts
+    return StreamingResponse(
+        _a2a_events(question, sid), media_type="text/event-stream"
+    )
 
 
 if __name__ == "__main__":
