@@ -25,7 +25,6 @@ function ThinkingBubble({thinking, steps, done}: {thinking: string; steps: strin
       </div>
       {!collapsed && (
         <>
-          {thinking && <div className="thinking-body">{thinking}</div>}
           <div className="thinking-steps">
             {steps.map((s, i) => (
               <div className="thinking-step" key={i}>
@@ -33,6 +32,7 @@ function ThinkingBubble({thinking, steps, done}: {thinking: string; steps: strin
               </div>
             ))}
           </div>
+          {thinking && <div className="thinking-body">{thinking}</div>}
         </>
       )}
     </div>

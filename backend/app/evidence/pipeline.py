@@ -227,6 +227,11 @@ def assemble(
     # references 只保留被引用的（无引用则全留，避免空文献区）
     cited = {i for i in citations}
     kept = [r for r in refs if r.id in cited] or refs
+    # 重编号为 1..N（候选原始 id 可能跳号，如引用了 [1][3] → 卡片显示 1、3），
+    # 同步把结论 citations 重映射到新号，保证文献序号连续、引用一致。
+    id_map = {r.id: i for i, r in enumerate(kept, start=1)}
+    kept = [r.model_copy(update={"id": id_map[r.id]}) for r in kept]
+    citations = [id_map[c] for c in citations if c in id_map]
     return EvidenceAnswer(
         question=question,
         intro=llm.get("intro", ""),
@@ -300,7 +305,12 @@ def _check() -> None:
     # 无引用时全留
     ans2 = assemble("q", refs, {"conclusion": {"citations": []}})
     assert len(ans2.references) == 2
-    print("OK: 候选构建 + 悬空引用过滤 + references 保留逻辑全通过")
+    # 跳号重编号：只引用候选 2 → 文献重编为 1，citations 同步重映射
+    ans3 = assemble("q", refs, {"conclusion": {"subject": "s", "citations": [2]}})
+    assert [r.id for r in ans3.references] == [1], "被引文献应重编为 1"
+    assert ans3.references[0].title == "Loratadine RCT", "重编号错配文献"
+    assert ans3.conclusion.citations == [1], "citations 未同步重映射"
+    print("OK: 候选构建 + 悬空引用过滤 + references 保留/重编号逻辑全通过")
 
 
 if __name__ == "__main__":
