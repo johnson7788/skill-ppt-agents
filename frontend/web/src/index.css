@@ -77,6 +77,52 @@ body {
   flex-direction: column;
   gap: 14px;
 }
+/* ── 空态：示例问题（点击即发送）── */
+.empty {
+  margin: auto 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 8px;
+}
+.empty-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+}
+.empty-sub {
+  font-size: 13px;
+  color: #9ca3af;
+  margin-bottom: 12px;
+}
+.empty-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 340px;
+}
+.example-chip {
+  text-align: left;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+  color: #374151;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.example-chip:hover:not(:disabled) {
+  border-color: #16a34a;
+  color: #15803d;
+}
+.example-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .bubble {
   max-width: 82%;
   padding: 11px 13px;
@@ -295,6 +341,92 @@ body {
   padding: 1px 7px;
   border-radius: 4px;
   margin-right: 4px;
+}
+
+/* ── 自测问卷/量表 ── */
+.quiz {
+  padding: 4px 2px;
+  font-size: 14px;
+  color: #1f2937;
+}
+.quiz-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+.quiz-intro {
+  margin: 4px 0 12px;
+  color: #6b7280;
+  font-size: 13px;
+}
+.quiz-item {
+  padding: 10px 0;
+  border-top: 1px solid #f0f0f0;
+}
+.quiz-q {
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+.quiz-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.quiz-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13px;
+  background: #fff;
+}
+.quiz-opt.sel {
+  border-color: #16a34a;
+  background: #ecfdf5;
+  color: #15803d;
+}
+.quiz-submit {
+  margin-top: 14px;
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 15px;
+  color: #fff;
+  background: #16a34a;
+  cursor: pointer;
+}
+.quiz-submit:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+}
+.quiz-result {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+.quiz-score {
+  font-size: 16px;
+  font-weight: 700;
+  color: #15803d;
+}
+.quiz-band {
+  color: #166534;
+}
+.quiz-advice {
+  margin-top: 6px;
+  line-height: 1.7;
+  color: #374151;
+}
+.quiz-disclaimer {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #9ca3af;
+  line-height: 1.6;
 }
 
 /* ── 输入栏 ── */

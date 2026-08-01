@@ -20,7 +20,16 @@ import os
 import pathlib
 from typing import Any
 
-from .schema import Caution, Conclusion, ConclusionPoint, EvidenceAnswer, Reference
+from .schema import (
+    Caution,
+    Conclusion,
+    ConclusionPoint,
+    EvidenceAnswer,
+    Questionnaire,
+    Reference,
+    ScaleBand,
+    ScaleOption,
+)
 
 # medical-pico-search skill 脚本（M4 已 vendor 进本 repo，默认走仓内相对路径，可 env 覆盖）
 _VENDORED = (
@@ -100,14 +109,17 @@ async def extract_pico(question: str) -> dict[str, str]:
     return {k: str(d.get(k, "")).strip() for k in ("P", "I", "C", "O")}
 
 
-# 分诊：判断消息是否需要循证卡（同一次 LLM 顺带抽 PICO，不额外增加往返）。
+# 分诊：判断消息走哪个模式（同一次 LLM 顺带抽 PICO，不额外增加往返）。
 _ROUTE_SYS = (
-    "你是循证医学助手的分诊器。判断用户这条消息是否是「需要文献支撑的临床问题」，"
-    "只输出 JSON：\n"
-    '{"mode":"evidence|chat","reply":"当 mode=chat 时的一两句中文口语回复",'
+    "你是医学助手的分诊器。判断用户这条消息该走哪个模式，只输出 JSON：\n"
+    '{"mode":"evidence|chat|questionnaire",'
+    '"reply":"当 mode=chat/questionnaire 时的一两句中文口语引导",'
     '"P":"人群/疾病","I":"干预/药物","C":"对照(可空)","O":"结局(可空)"}。\n'
-    "mode=evidence：在问某疾病/症状能否用某药、某治疗是否有效等临床问题，"
+    "mode=evidence：问某疾病/症状能否用某药、某治疗是否有效等需文献支撑的临床问题，"
     "此时填 PICO（关键词供向量检索、禁含年份，C/O 判断不了留空），reply 留空。\n"
+    "mode=questionnaire：用户想自测/自评一个可量表化的症状群（如「测测我是不是抑郁」"
+    "「焦虑严重吗」「帮我评估睡眠质量」「我是什么体质」），需要先做量表打分。"
+    "此时 reply 给一句引导语（如「好的，我们做个简短的抑郁自评」），PICO 全留空。\n"
     "mode=chat：寒暄/致谢/闲聊/与医疗无关/不构成临床问题（如「好的谢谢」「你好」「嗯嗯」），"
     "此时给一句得体的中文口语 reply，PICO 全留空。"
 )
@@ -115,16 +127,61 @@ _ROUTE_SYS = (
 
 def _is_chat(mode: str, pico: dict[str, str]) -> bool:
     """chat 分支判定（纯函数）：显式 chat，或无人群/干预（无从检索）→ 当闲聊处理，
-    避免对「好的谢谢」这类硬跑检索、渲染空循证卡。"""
+    避免对「好的谢谢」这类硬跑检索、渲染空循证卡。
+    注意：questionnaire 模式不经此函数（在 stream_answer 里先分流），否则空 PICO 会误降级。"""
     return mode == "chat" or not (pico.get("P") or pico.get("I"))
 
 
 async def classify(question: str) -> tuple[str, str, dict[str, str]]:
     """返回 (mode, reply, pico)。一次 LLM 同时做意图分诊 + PICO 抽取。"""
     d = await _chat_json(_ROUTE_SYS, question)
-    mode = "chat" if str(d.get("mode")) == "chat" else "evidence"
+    raw = str(d.get("mode"))
+    mode = raw if raw in ("chat", "questionnaire") else "evidence"
     pico = {k: str(d.get(k, "")).strip() for k in ("P", "I", "C", "O")}
     return mode, str(d.get("reply", "")).strip(), pico
+
+
+# --- 自测问卷/量表生成 --------------------------------------------------------
+_QUIZ_SYS = (
+    "你是临床自评量表助手。根据用户想自测的症状，给出一份**成熟、公认**的自评量表"
+    "（如抑郁→PHQ-9、焦虑→GAD-7、睡眠→匹兹堡PSQI精简、中医体质→王琦九分法精简）。"
+    "所有题共用同一组选项。只输出严格 JSON：\n"
+    '{"title":"量表名","intro":"填写说明(一句)",'
+    '"options":[{"label":"选项文字","score":整数}],'
+    '"items":["题干1","题干2",...],'
+    '"bands":[{"min":下界,"max":上界,"label":"档位名","advice":"该档位建议"}],'
+    '"disclaimer":"免责声明"}\n'
+    "要求：options 按分值从低到高排列；bands 覆盖 0 到满分且区间不重叠；"
+    "题目控制在 5-12 题；只做倾向/分档提示，disclaimer 必须写明「仅供参考、不能替代医生面诊」。"
+)
+
+
+def assemble_quiz(d: dict[str, Any]) -> Questionnaire:
+    """纯函数：LLM 输出 -> Questionnaire。强制数值、补默认免责声明。"""
+    options = [ScaleOption(label=str(o.get("label", "")), score=int(o.get("score", 0)))
+               for o in d.get("options", []) or []]
+    bands = [ScaleBand(min=int(b.get("min", 0)), max=int(b.get("max", 0)),
+                       label=str(b.get("label", "")), advice=str(b.get("advice", "")))
+             for b in d.get("bands", []) or []]
+    items = [str(x) for x in d.get("items", []) or [] if str(x).strip()]
+    return Questionnaire(
+        title=str(d.get("title", "自评量表")),
+        intro=str(d.get("intro", "")),
+        options=options,
+        items=items,
+        bands=bands,
+        disclaimer=str(d.get("disclaimer") or "本结果仅供参考，不能替代医生面诊。"),
+    )
+
+
+async def build_questionnaire(question: str) -> Questionnaire:
+    return assemble_quiz(await _chat_json(_QUIZ_SYS, question))
+
+
+async def stream_questionnaire(question: str):
+    """问卷模式事件流：status 旁白 + 一条 questionnaire 事件（量表定义）。"""
+    yield {"kind": "status", "text": "匹配自评量表…"}
+    yield {"kind": "questionnaire", "questionnaire": await build_questionnaire(question)}
 
 
 # --------------------------------------------------------------------------- 2
@@ -292,8 +349,15 @@ async def stream_answer(question: str, history: list[str] | None = None):
     if history:
         prior = "\n".join(f"- {h}" for h in history)
         context = f"对话背景（此前的追问，需综合考虑并在已有结论上补充/修订）：\n{prior}\n\n"
-    # 先分诊：闲聊/致谢等直接口语回复，不跑检索、不出循证卡（A2UI 随内容自适应）。
+    # 先分诊：不同模式走不同 handler，A2UI 随到达的组件自适应（前端无分支）。
     mode, reply, pico = await classify(context + question)
+    if mode == "questionnaire":
+        # questionnaire 必须在 _is_chat 之前分流：它 PICO 恒空，否则会被误当闲聊降级。
+        if reply:
+            yield {"kind": "chat", "text": reply}
+        async for evt in stream_questionnaire(question):
+            yield evt
+        return
     if _is_chat(mode, pico):
         yield {"kind": "chat", "text": reply or "好的，有需要随时问我～"}
         return
@@ -345,7 +409,17 @@ def _check() -> None:
     assert _is_chat("evidence", {"P": "", "I": ""}) is True, "空 PICO 应降级为 chat"
     assert _is_chat("evidence", {"P": "过敏性鼻炎", "I": ""}) is False
     assert _is_chat("evidence", {"P": "", "I": "氯雷他定"}) is False
-    print("OK: 候选构建 + 悬空引用过滤 + references 重编号 + 分诊判定全通过")
+    # 问卷装配：强制数值、补默认免责声明
+    quiz = assemble_quiz({
+        "title": "PHQ-9", "intro": "最近两周",
+        "options": [{"label": "完全不会", "score": 0}, {"label": "几乎每天", "score": "3"}],
+        "items": ["提不起劲", "心情低落", ""],  # 空题干应被过滤
+        "bands": [{"min": 0, "max": 4, "label": "无", "advice": "观察"}],
+    })
+    assert quiz.options[1].score == 3, "score 应强制转 int"
+    assert quiz.items == ["提不起劲", "心情低落"], "空题干未过滤"
+    assert "面诊" in quiz.disclaimer, "缺失 disclaimer 应补默认"
+    print("OK: 候选构建 + 悬空引用过滤 + references 重编号 + 分诊 + 问卷装配全通过")
 
 
 if __name__ == "__main__":

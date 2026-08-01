@@ -26,11 +26,16 @@ from app.evidence.mapper import (
     SURFACE_ID,
     create_surface_msg,
     evidence_components,
+    questionnaire_components,
     update_components_msg,
 )
 from app.evidence.pipeline import stream_answer
+from app.evidence.schema import Questionnaire
 
 FIXTURE = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "loratadine.json"
+QUIZ_FIXTURE = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "phq9.json"
+# 问卷 mock 触发词（EVIDENCE_MOCK=1 时命中则走问卷 fixture，否则循证 fixture）
+_QUIZ_HINTS = ("测", "抑郁", "焦虑", "量表", "自评", "评估", "体质")
 
 app = FastAPI(title="evidence-a2ui")
 app.add_middleware(
@@ -50,6 +55,13 @@ async def _retrieve_stream(question: str, history: list[str]):
     """产 pipeline 事件：{"kind":"status"/"thinking"/"answer"}。
     EVIDENCE_MOCK=1 时不触网，发两条 status 旁白后直接给 fixture answer。"""
     if os.environ.get("EVIDENCE_MOCK") == "1":
+        # ponytail: mock 不跑 LLM 分诊，用关键词粗判走问卷还是循证 fixture（仅联调用）。
+        if any(h in question for h in _QUIZ_HINTS):
+            yield {"kind": "chat", "text": "好的，我们做个简短的自评。"}
+            yield {"kind": "status", "text": "匹配自评量表…"}
+            q = Questionnaire.model_validate(json.loads(QUIZ_FIXTURE.read_text("utf-8")))
+            yield {"kind": "questionnaire", "questionnaire": q}
+            return
         yield {"kind": "status", "text": "抽取临床要素（PICO）…"}
         yield {"kind": "status", "text": "检索指南 / Meta 分析 / RCT…"}
         yield {"kind": "status", "text": "综合证据、生成循证结论…"}
@@ -80,6 +92,10 @@ async def _a2a_events(question: str, surface_id: str, history: list[str]):
                 answer: EvidenceAnswer = evt["answer"]
                 comps = evidence_components(answer)
                 yield _sse({"kind": "text", "text": answer.intro})
+                yield _sse({"kind": "data", "data": create_surface_msg(surface_id)})
+                yield _sse({"kind": "data", "data": update_components_msg(comps, surface_id)})
+            elif kind == "questionnaire":
+                comps = questionnaire_components(evt["questionnaire"])
                 yield _sse({"kind": "data", "data": create_surface_msg(surface_id)})
                 yield _sse({"kind": "data", "data": update_components_msg(comps, surface_id)})
     except Exception as e:  # noqa: BLE001 — 边界兜底，任何失败都给友好提示，不留死流

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .schema import EvidenceAnswer
+from .schema import EvidenceAnswer, Questionnaire
 
 VERSION = "v0.9"
 # 合并了 basic + 3 个 Smart Wrapper(EvidenceHeader/EvidenceBadge/CautionBox) 的自定义
@@ -132,6 +132,22 @@ def evidence_components(answer: EvidenceAnswer) -> list[dict[str, Any]]:
     add({"id": "root", "component": "Card", "child": "root_col"})
 
     return comps
+
+
+def questionnaire_components(q: Questionnaire) -> list[dict[str, Any]]:
+    """把 Questionnaire 拼成组件列表：单个自定义 Questionnaire 组件（自带打分逻辑），
+    评分在前端做（选项 score 求和 → 落 band），后端只传量表定义。"""
+    # A2UI 约定：组件树必须有一个 id="root" 的根组件（web_core server_to_client schema）。
+    return [{
+        "id": "root",
+        "component": "Questionnaire",
+        "title": q.title,
+        "intro": q.intro,
+        "options": [o.model_dump() for o in q.options],
+        "items": list(q.items),
+        "bands": [b.model_dump() for b in q.bands],
+        "disclaimer": q.disclaimer,
+    }]
 
 
 def evidence_to_a2ui(

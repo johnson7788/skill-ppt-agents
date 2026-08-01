@@ -6,6 +6,7 @@
  * 后端 mapper 的 createSurface 用同一个 catalogId、并 emit 这些组件类型。
  * 只做 basic 表达不了的三处（plan §6：最少 Smart Wrapper），其余仍走 basic + CSS。
  */
+import {useState} from 'react';
 import {z} from 'zod';
 import {
   createComponentImplementation,
@@ -72,6 +73,81 @@ const CautionBox = createComponentImplementation(
   ),
 );
 
+// 自测问卷/量表：后端只给量表定义，打分在这里做（选项 score 求和 → 落 band）。
+// round-trip 免除——组件自持状态、本地评分、就地出结果，不回传 agent。
+type QuizBand = {min: number; max: number; label: string; advice: string};
+
+// 纯函数：各题所选选项分值求和 → 命中的档位（未命中返回 null）。e2e 覆盖。
+function scoreQuiz(picked: number[], scores: number[], bands: QuizBand[]) {
+  const total = picked.reduce((sum, opt) => sum + (scores[opt] ?? 0), 0);
+  const band = bands.find(b => total >= b.min && total <= b.max) ?? null;
+  return {total, band};
+}
+
+const Questionnaire = createComponentImplementation(
+  {
+    name: 'Questionnaire',
+    schema: z
+      .object({
+        title: z.string(),
+        intro: z.string(),
+        options: z.array(z.object({label: z.string(), score: z.number()})),
+        items: z.array(z.string()),
+        bands: z.array(
+          z.object({min: z.number(), max: z.number(), label: z.string(), advice: z.string()}),
+        ),
+        disclaimer: z.string(),
+      })
+      .strict(),
+  },
+  ({props}) => {
+    const {options, items, bands} = props;
+    const [picked, setPicked] = useState<number[]>(() => items.map(() => -1));
+    const [result, setResult] = useState<ReturnType<typeof scoreQuiz> | null>(null);
+    const allAnswered = picked.every(p => p >= 0);
+    const submit = () => setResult(scoreQuiz(picked, options.map(o => o.score), bands));
+    return (
+      <div className="quiz">
+        <div className="quiz-title">{props.title}</div>
+        {props.intro && <div className="quiz-intro">{props.intro}</div>}
+        {items.map((q: string, qi: number) => (
+          <div className="quiz-item" key={qi}>
+            <div className="quiz-q">
+              {qi + 1}. {q}
+            </div>
+            <div className="quiz-opts">
+              {options.map((o, oi) => (
+                <label className={`quiz-opt${picked[qi] === oi ? ' sel' : ''}`} key={oi}>
+                  <input
+                    type="radio"
+                    name={`q${qi}`}
+                    checked={picked[qi] === oi}
+                    onChange={() => setPicked(p => p.map((v, i) => (i === qi ? oi : v)))}
+                  />
+                  {o.label}
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+        <button className="quiz-submit" disabled={!allAnswered} onClick={submit}>
+          {allAnswered ? '查看结果' : `请完成全部 ${items.length} 题`}
+        </button>
+        {result && (
+          <div className="quiz-result">
+            <div className="quiz-score">
+              总分 {result.total}
+              {result.band && <span className="quiz-band"> · {result.band.label}</span>}
+            </div>
+            {result.band && <div className="quiz-advice">{result.band.advice}</div>}
+          </div>
+        )}
+        <div className="quiz-disclaimer">{props.disclaimer}</div>
+      </div>
+    );
+  },
+);
+
 const basicComponents: ReactComponentImplementation[] = [
   Text, Image, Icon, Video, AudioPlayer, Row, Column, List, Card, Tabs,
   Divider, Modal, Button, TextField, CheckBox, ChoicePicker, Slider, DateTimeInput,
@@ -79,6 +155,6 @@ const basicComponents: ReactComponentImplementation[] = [
 
 export const evidenceCatalog = new Catalog<ReactComponentImplementation>(
   EVIDENCE_CATALOG_ID,
-  [...basicComponents, EvidenceHeader, EvidenceBadge, CautionBox],
+  [...basicComponents, EvidenceHeader, EvidenceBadge, CautionBox, Questionnaire],
   BASIC_FUNCTIONS,
 );

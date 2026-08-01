@@ -5,7 +5,13 @@ import {renderMarkdown} from '@a2ui/markdown-it';
 import {evidenceCatalog} from './catalog';
 import './index.css';
 
-const DEFAULT_Q = '一直打喷嚏，可以吃氯雷他定吗？';
+// 空态示例问题（点击即发送）：覆盖循证/自测问卷/追问等模式，方便用户快速上手。
+const EXAMPLES = [
+  '一直打喷嚏，可以吃氯雷他定吗？',
+  '孕妇能吃氯雷他定吗？',
+  '测测我最近是不是抑郁了',
+  '布洛芬和对乙酰氨基酚有什么区别？',
+];
 
 interface Part {
   kind: 'data' | 'text' | 'error' | 'status' | 'thinking' | 'done';
@@ -55,7 +61,7 @@ export function App() {
     [],
   );
   const [surfaces, setSurfaces] = useState<SurfaceModel<ReactComponentImplementation>[]>([]);
-  const [question, setQuestion] = useState(DEFAULT_Q);
+  const [question, setQuestion] = useState('');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [loading, setLoading] = useState(false);
   // 用 ref 读最新 turns（ask 闭包里避免拿到旧值），供组装追问上下文 history
@@ -143,6 +149,24 @@ export function App() {
         </header>
 
         <main className="chat">
+          {turns.length === 0 && (
+            <div className="empty">
+              <div className="empty-title">你好，我是小团健康管家</div>
+              <div className="empty-sub">循证支持 · 点下面的问题快速开始</div>
+              <div className="empty-examples">
+                {EXAMPLES.map(q => (
+                  <button
+                    className="example-chip"
+                    key={q}
+                    disabled={loading}
+                    onClick={() => ask(q)}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {turns.map((t, i) => (
             <Fragment key={i}>
               <div className="bubble user">{t.q}</div>
@@ -171,7 +195,7 @@ export function App() {
             }
           }}
         >
-          <input value={question} onChange={e => setQuestion(e.target.value)} placeholder="输入你的健康问题…" />
+          <input value={question} onChange={e => setQuestion(e.target.value)} placeholder="" />
           <button type="submit" disabled={loading}>
             发送
           </button>

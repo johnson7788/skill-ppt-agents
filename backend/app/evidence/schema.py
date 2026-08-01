@@ -43,3 +43,26 @@ class EvidenceAnswer(BaseModel):
     conclusion: Conclusion
     cautions: list[Caution] = Field(default_factory=list)
     references: list[Reference] = Field(default_factory=list)
+
+
+# --- 自测问卷/量表模式（如 PHQ-9、GAD-7、中医体质辨识）-------------------------
+# 评分在前端做（选项 score 求和 → 落到某个 band），后端只产量表定义。
+class ScaleOption(BaseModel):
+    label: str  # 如 "完全不会"
+    score: int  # 该选项计分，如 0/1/2/3
+
+
+class ScaleBand(BaseModel):
+    min: int  # 区间下界（含）
+    max: int  # 区间上界（含）
+    label: str  # 如 "中度"
+    advice: str  # 该档位的建议
+
+
+class Questionnaire(BaseModel):
+    title: str  # 如 "PHQ-9 抑郁自评量表"
+    intro: str  # 填写说明，如 "根据最近两周的情况选择"
+    options: list[ScaleOption]  # 所有题共用一组选项（PHQ/GAD 皆如此）
+    items: list[str]  # 题干列表
+    bands: list[ScaleBand]  # 总分分档
+    disclaimer: str  # 免责声明（结果仅供参考、不替代面诊）
