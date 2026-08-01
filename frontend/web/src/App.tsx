@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {Fragment, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {A2uiSurface, MarkdownContext, ReactComponentImplementation} from '@a2ui/react/v0_9';
 import {MessageProcessor, SurfaceModel, A2uiMessage} from '@a2ui/web_core/v0_9';
 import {renderMarkdown} from '@a2ui/markdown-it';
@@ -12,6 +12,16 @@ interface Part {
   data?: A2uiMessage;
   text?: string;
   delta?: string;
+}
+
+// 一轮对话：用户问 + 该轮的思考/引导语/循证卡（各轮独立，卡片用唯一 surfaceId）
+interface Turn {
+  q: string;
+  intro: string;
+  thinking: string;
+  steps: string[];
+  done: boolean;
+  surfaceId: string;
 }
 
 function ThinkingBubble({thinking, steps, done}: {thinking: string; steps: string[]; done: boolean}) {
@@ -46,14 +56,11 @@ export function App() {
   );
   const [surfaces, setSurfaces] = useState<SurfaceModel<ReactComponentImplementation>[]>([]);
   const [question, setQuestion] = useState(DEFAULT_Q);
-  const [history, setHistory] = useState<string[]>([]);
-  const [intro, setIntro] = useState('');
+  const [turns, setTurns] = useState<Turn[]>([]);
   const [loading, setLoading] = useState(false);
-  const [thinking, setThinking] = useState('');
-  const [steps, setSteps] = useState<string[]>([]);
-  const [thinkingDone, setThinkingDone] = useState(false);
-  // 每次加载生成新会话 id；后端据此区分首轮(建卡)与追问(增量更新同一张卡)
-  const sessionId = useMemo(() => Math.random().toString(36).slice(2), []);
+  // 用 ref 读最新 turns（ask 闭包里避免拿到旧值），供组装追问上下文 history
+  const turnsRef = useRef<Turn[]>([]);
+  turnsRef.current = turns;
 
   useEffect(() => {
     const s1 = processor.onSurfaceCreated(s => setSurfaces(prev => [...prev, s]));
@@ -67,20 +74,23 @@ export function App() {
   const ask = useCallback(
     async (q: string) => {
       setLoading(true);
-      setIntro('');
-      setThinking('');
-      setSteps([]);
-      setThinkingDone(false);
-      setHistory(prev => [...prev, q]);
-      // 不删 surface：首轮由后端 createSurface 建卡，追问只发差异 updateComponents
-      // → MessageProcessor 按组件 id 原地合并，卡片增量更新、不整块重画。
-      // 读 SSE 流：fetch + ReadableStream reader（POST 不能用原生 EventSource），
-      // 按 \n\n 切事件、data: 前缀去掉后 JSON.parse，按 kind 分发。
+      // 每轮独立卡片：唯一 surfaceId，后端每轮 createSurface + 全量组件（不再共用一张卡增量 diff）
+      const surfaceId = `card-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      const history = turnsRef.current.map(t => t.q); // 此前的问题，供 LLM 连续上下文
+      setTurns(prev => [...prev, {q, intro: '', thinking: '', steps: [], done: false, surfaceId}]);
+      // 只改「最后一轮」（即刚追加的这轮）
+      const patchLast = (upd: (t: Turn) => Partial<Turn>) =>
+        setTurns(prev => {
+          const c = [...prev];
+          const last = c[c.length - 1];
+          c[c.length - 1] = {...last, ...upd(last)};
+          return c;
+        });
       try {
         const res = await fetch('/a2a', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({question: q, session_id: sessionId}),
+          body: JSON.stringify({question: q, surface_id: surfaceId, history}),
         });
         const reader = res.body!.getReader();
         const decoder = new TextDecoder();
@@ -95,22 +105,25 @@ export function App() {
             buf = buf.slice(idx + 2);
             if (!raw.startsWith('data:')) continue;
             const evt = JSON.parse(raw.slice(5).trim()) as Part;
-            if (evt.kind === 'status' && evt.text) setSteps(prev => [...prev, evt.text!]);
-            else if (evt.kind === 'thinking' && evt.delta) setThinking(prev => prev + evt.delta);
-            else if (evt.kind === 'text' && evt.text) setIntro(await renderMarkdown(evt.text));
-            else if (evt.kind === 'data' && evt.data) {
-              setThinkingDone(true); // 卡片首条 data 到达 → 折叠思考气泡
+            if (evt.kind === 'status' && evt.text) patchLast(t => ({steps: [...t.steps, evt.text!]}));
+            else if (evt.kind === 'thinking' && evt.delta)
+              patchLast(t => ({thinking: t.thinking + evt.delta}));
+            else if (evt.kind === 'text' && evt.text) {
+              const html = await renderMarkdown(evt.text);
+              patchLast(() => ({intro: html}));
+            } else if (evt.kind === 'data' && evt.data) {
+              patchLast(() => ({done: true})); // 卡片首条 data 到达 → 折叠思考气泡
               processor.processMessages([evt.data]);
-            } else if (evt.kind === 'error' && evt.text) setIntro(evt.text);
+            } else if (evt.kind === 'error' && evt.text) patchLast(() => ({intro: evt.text}));
           }
         }
       } catch (e) {
-        setIntro(`出错了：${e instanceof Error ? e.message : String(e)}`);
+        patchLast(() => ({intro: `出错了：${e instanceof Error ? e.message : String(e)}`}));
       } finally {
         setLoading(false);
       }
     },
-    [processor, sessionId],
+    [processor],
   );
 
   // StrictMode 会双跑 effect；ref 保证初始加载只发一次，避免 createSurface 撞 id
@@ -139,19 +152,21 @@ export function App() {
         </header>
 
         <main className="chat">
-          {history.map((q, i) => (
-            <div className="bubble user" key={i}>
-              {q}
-            </div>
-          ))}
-          {(thinking || steps.length > 0) && (
-            <ThinkingBubble thinking={thinking} steps={steps} done={thinkingDone} />
-          )}
-          {intro && <div className="bubble ai" dangerouslySetInnerHTML={{__html: intro}} />}
-          {surfaces.map(s => (
-            <div className="card-wrap" key={s.id}>
-              <A2uiSurface surface={s} />
-            </div>
+          {turns.map((t, i) => (
+            <Fragment key={i}>
+              <div className="bubble user">{t.q}</div>
+              {(t.thinking || t.steps.length > 0) && (
+                <ThinkingBubble thinking={t.thinking} steps={t.steps} done={t.done} />
+              )}
+              {t.intro && <div className="bubble ai" dangerouslySetInnerHTML={{__html: t.intro}} />}
+              {surfaces
+                .filter(s => s.id === t.surfaceId)
+                .map(s => (
+                  <div className="card-wrap" key={s.id}>
+                    <A2uiSurface surface={s} />
+                  </div>
+                ))}
+            </Fragment>
           ))}
         </main>
 
@@ -159,7 +174,10 @@ export function App() {
           className="composer"
           onSubmit={e => {
             e.preventDefault();
-            if (question.trim()) ask(question.trim());
+            if (question.trim() && !loading) {
+              ask(question.trim());
+              setQuestion('');
+            }
           }}
         >
           <input value={question} onChange={e => setQuestion(e.target.value)} placeholder="输入你的健康问题…" />
