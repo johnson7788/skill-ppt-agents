@@ -184,6 +184,35 @@ async def stream_questionnaire(question: str):
     yield {"kind": "questionnaire", "questionnaire": await build_questionnaire(question)}
 
 
+# --- chat 分支：有人设、会共情、可流式的回复（不再复用路由器那句干巴巴的 reply）----
+_CHAT_SYS = (
+    "你是「小团健康管家」，一位温暖、耐心、有同理心的 AI 健康助手。"
+    "用自然口语的中文回应用户：先共情、再给贴心而中肯的建议或轻轻追问。"
+    "语气亲切像朋友，不要用标题或条列式，2-4 句即可，别长篇大论。"
+    "涉及可能的健康问题时温和提示必要时就医，但不要制造焦虑。"
+)
+
+
+async def stream_chat(question: str, context: str = ""):
+    """chat 分支流式回复：逐块 yield {"kind":"chat_delta","delta":...}（纯文本正文）。
+    非 json 模式、temperature 略高以显温度；只取 content（chat 不需要思考气泡）。"""
+    import litellm
+
+    model, key = _model_and_key()
+    resp = await litellm.acompletion(
+        model=model,
+        api_key=key,
+        temperature=0.7,
+        stream=True,
+        messages=[{"role": "system", "content": _CHAT_SYS},
+                  {"role": "user", "content": context + question}],
+    )
+    async for chunk in resp:
+        delta = getattr(chunk.choices[0].delta, "content", None)
+        if delta:
+            yield {"kind": "chat_delta", "delta": delta}
+
+
 # --------------------------------------------------------------------------- 2
 def _load_skill():
     spec = importlib.util.spec_from_file_location("infoxmed_search", PICO_SEARCH_SCRIPT)
@@ -359,7 +388,12 @@ async def stream_answer(question: str, history: list[str] | None = None):
             yield evt
         return
     if _is_chat(mode, pico):
-        yield {"kind": "chat", "text": reply or "好的，有需要随时问我～"}
+        streamed = False
+        async for evt in stream_chat(question, context):
+            streamed = True
+            yield evt
+        if not streamed:  # 流式没吐任何内容时兜底一句，避免空气泡
+            yield {"kind": "chat_delta", "delta": reply or "好的，有需要随时问我～"}
         return
     yield {"kind": "status", "text": "检索指南 / Meta 分析 / RCT…"}
     results = await run_search(pico)

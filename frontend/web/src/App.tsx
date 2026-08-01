@@ -14,11 +14,15 @@ const EXAMPLES = [
 ];
 
 interface Part {
-  kind: 'data' | 'text' | 'error' | 'status' | 'thinking' | 'done';
+  kind: 'data' | 'text' | 'error' | 'status' | 'thinking' | 'chat' | 'done';
   data?: A2uiMessage;
   text?: string;
   delta?: string;
 }
+
+// chat 流式 delta 直接拼进 intro（dangerouslySetInnerHTML），转义防注入
+const escHtml = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // 一轮对话：用户问 + 该轮的思考/引导语/循证卡（各轮独立，卡片用唯一 surfaceId）
 interface Turn {
@@ -114,6 +118,8 @@ export function App() {
             if (evt.kind === 'status' && evt.text) patchLast(t => ({steps: [...t.steps, evt.text!]}));
             else if (evt.kind === 'thinking' && evt.delta)
               patchLast(t => ({thinking: t.thinking + evt.delta}));
+            else if (evt.kind === 'chat' && evt.delta)
+              patchLast(t => ({intro: t.intro + escHtml(evt.delta!)}));
             else if (evt.kind === 'text' && evt.text) {
               const html = await renderMarkdown(evt.text);
               patchLast(() => ({intro: html}));

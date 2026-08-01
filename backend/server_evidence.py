@@ -86,8 +86,11 @@ async def _a2a_events(question: str, surface_id: str, history: list[str]):
             elif kind == "thinking":
                 yield _sse({"kind": "thinking", "delta": evt["delta"]})
             elif kind == "chat":
-                # 闲聊/致谢：纯文字回复，不建 surface、不出循证卡
+                # 整句文字（如问卷模式的引导语）：不建 surface、不出循证卡
                 yield _sse({"kind": "text", "text": evt["text"]})
+            elif kind == "chat_delta":
+                # 闲聊/软问题：有人设的流式回复，逐块追加进 AI 气泡
+                yield _sse({"kind": "chat", "delta": evt["delta"]})
             elif kind == "answer":
                 answer: EvidenceAnswer = evt["answer"]
                 comps = evidence_components(answer)
