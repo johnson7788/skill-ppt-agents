@@ -73,6 +73,9 @@ async def _a2a_events(question: str, surface_id: str, history: list[str]):
                 yield _sse({"kind": "status", "text": evt["text"]})
             elif kind == "thinking":
                 yield _sse({"kind": "thinking", "delta": evt["delta"]})
+            elif kind == "chat":
+                # 闲聊/致谢：纯文字回复，不建 surface、不出循证卡
+                yield _sse({"kind": "text", "text": evt["text"]})
             elif kind == "answer":
                 answer: EvidenceAnswer = evt["answer"]
                 comps = evidence_components(answer)

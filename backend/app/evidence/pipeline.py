@@ -100,6 +100,33 @@ async def extract_pico(question: str) -> dict[str, str]:
     return {k: str(d.get(k, "")).strip() for k in ("P", "I", "C", "O")}
 
 
+# 分诊：判断消息是否需要循证卡（同一次 LLM 顺带抽 PICO，不额外增加往返）。
+_ROUTE_SYS = (
+    "你是循证医学助手的分诊器。判断用户这条消息是否是「需要文献支撑的临床问题」，"
+    "只输出 JSON：\n"
+    '{"mode":"evidence|chat","reply":"当 mode=chat 时的一两句中文口语回复",'
+    '"P":"人群/疾病","I":"干预/药物","C":"对照(可空)","O":"结局(可空)"}。\n'
+    "mode=evidence：在问某疾病/症状能否用某药、某治疗是否有效等临床问题，"
+    "此时填 PICO（关键词供向量检索、禁含年份，C/O 判断不了留空），reply 留空。\n"
+    "mode=chat：寒暄/致谢/闲聊/与医疗无关/不构成临床问题（如「好的谢谢」「你好」「嗯嗯」），"
+    "此时给一句得体的中文口语 reply，PICO 全留空。"
+)
+
+
+def _is_chat(mode: str, pico: dict[str, str]) -> bool:
+    """chat 分支判定（纯函数）：显式 chat，或无人群/干预（无从检索）→ 当闲聊处理，
+    避免对「好的谢谢」这类硬跑检索、渲染空循证卡。"""
+    return mode == "chat" or not (pico.get("P") or pico.get("I"))
+
+
+async def classify(question: str) -> tuple[str, str, dict[str, str]]:
+    """返回 (mode, reply, pico)。一次 LLM 同时做意图分诊 + PICO 抽取。"""
+    d = await _chat_json(_ROUTE_SYS, question)
+    mode = "chat" if str(d.get("mode")) == "chat" else "evidence"
+    pico = {k: str(d.get(k, "")).strip() for k in ("P", "I", "C", "O")}
+    return mode, str(d.get("reply", "")).strip(), pico
+
+
 # --------------------------------------------------------------------------- 2
 def _load_skill():
     spec = importlib.util.spec_from_file_location("infoxmed_search", PICO_SEARCH_SCRIPT)
@@ -265,8 +292,11 @@ async def stream_answer(question: str, history: list[str] | None = None):
     if history:
         prior = "\n".join(f"- {h}" for h in history)
         context = f"对话背景（此前的追问，需综合考虑并在已有结论上补充/修订）：\n{prior}\n\n"
-    yield {"kind": "status", "text": "抽取临床要素（PICO）…"}
-    pico = await extract_pico(context + question)
+    # 先分诊：闲聊/致谢等直接口语回复，不跑检索、不出循证卡（A2UI 随内容自适应）。
+    mode, reply, pico = await classify(context + question)
+    if _is_chat(mode, pico):
+        yield {"kind": "chat", "text": reply or "好的，有需要随时问我～"}
+        return
     yield {"kind": "status", "text": "检索指南 / Meta 分析 / RCT…"}
     results = await run_search(pico)
     yield {"kind": "status", "text": "综合证据、生成循证结论…"}
@@ -310,7 +340,12 @@ def _check() -> None:
     assert [r.id for r in ans3.references] == [1], "被引文献应重编为 1"
     assert ans3.references[0].title == "Loratadine RCT", "重编号错配文献"
     assert ans3.conclusion.citations == [1], "citations 未同步重映射"
-    print("OK: 候选构建 + 悬空引用过滤 + references 保留/重编号逻辑全通过")
+    # 分诊判定：闲聊 / 空 PICO → chat 分支；有人群或干预 → evidence 分支
+    assert _is_chat("chat", {"P": "", "I": ""}) is True
+    assert _is_chat("evidence", {"P": "", "I": ""}) is True, "空 PICO 应降级为 chat"
+    assert _is_chat("evidence", {"P": "过敏性鼻炎", "I": ""}) is False
+    assert _is_chat("evidence", {"P": "", "I": "氯雷他定"}) is False
+    print("OK: 候选构建 + 悬空引用过滤 + references 重编号 + 分诊判定全通过")
 
 
 if __name__ == "__main__":

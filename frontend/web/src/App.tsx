@@ -126,15 +126,6 @@ export function App() {
     [processor],
   );
 
-  // StrictMode 会双跑 effect；ref 保证初始加载只发一次，避免 createSurface 撞 id
-  const didInit = useRef(false);
-  useEffect(() => {
-    if (didInit.current) return;
-    didInit.current = true;
-    ask(DEFAULT_Q);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   return (
     <MarkdownContext.Provider value={renderMarkdown}>
       <div className="app">
