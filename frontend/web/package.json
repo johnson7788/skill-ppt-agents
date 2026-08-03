@@ -9,6 +9,7 @@
     "e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "dependencies": {
+    "@a2a-js/sdk": "^0.3.14",
     "@a2ui/markdown-it": "^0.1.0",
     "@a2ui/react": "^0.10.2",
     "@a2ui/web_core": "^0.10.5",

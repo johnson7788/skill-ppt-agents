@@ -38,7 +38,7 @@ echo -e "${GREEN}========================================${NC}"
 # 启动后端（循证问答 /a2a，端口 8700，vite 代理指向此端口）
 echo -e "${YELLOW}启动后端 (端口 8700)...${NC}"
 cd "$PROJECT_DIR/backend"
-uv run python server_evidence.py &
+uv run python -m app.evidence --port 8700 &
 BACKEND_PID=$!
 
 # 等待后端就绪
@@ -48,7 +48,7 @@ for i in $(seq 1 60); do
         echo -e "${YELLOW}后端进程已退出，启动失败${NC}"
         cleanup
     fi
-    if curl -sf "http://localhost:8700/" >/dev/null 2>&1; then
+    if curl -sf "http://localhost:8700/.well-known/agent-card.json" >/dev/null 2>&1; then
         echo -e "${GREEN}✓ 后端已就绪${NC}"
         break
     fi

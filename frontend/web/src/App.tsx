@@ -13,64 +13,36 @@ const EXAMPLES = [
   '布洛芬和对乙酰氨基酚有什么区别？',
 ];
 
+// 官方 A2A 传输：SSE 每帧 = A2A Part[]（{kind:'text',text} | {kind:'data',data:<A2UI消息>}）。
 interface Part {
-  kind: 'data' | 'text' | 'error' | 'status' | 'thinking' | 'chat' | 'done';
+  kind: 'data' | 'text' | 'error';
   data?: A2uiMessage;
   text?: string;
-  delta?: string;
 }
 
-// chat 流式 delta 直接拼进 intro（dangerouslySetInnerHTML），转义防注入
-const escHtml = (s: string) =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-// 一轮对话：用户问 + 该轮的思考/引导语/循证卡（各轮独立，卡片用唯一 surfaceId）
+// 一轮对话：用户问 + AI 引导语 + 该轮渲染出的卡片（surfaceId 由后端生成，前端记录后按它渲染）。
 interface Turn {
   q: string;
   intro: string;
-  thinking: string;
-  steps: string[];
-  done: boolean;
-  surfaceId: string;
-}
-
-function ThinkingBubble({thinking, steps, done}: {thinking: string; steps: string[]; done: boolean}) {
-  const [open, setOpen] = useState(false);
-  if (!thinking && steps.length === 0) return null;
-  const collapsed = done && !open;
-  return (
-    <div className={`thinking${collapsed ? ' collapsed' : ''}`}>
-      <div className="thinking-head" onClick={() => done && setOpen(o => !o)}>
-        {done ? <>已完成思考 {open ? '▾' : '▸'}</> : <><span className="thinking-dot" />思考中…</>}
-      </div>
-      {!collapsed && (
-        <>
-          <div className="thinking-steps">
-            {steps.map((s, i) => (
-              <div className="thinking-step" key={i}>
-                {done || i < steps.length - 1 ? '✓' : '•'} {s}
-              </div>
-            ))}
-          </div>
-          {thinking && <div className="thinking-body">{thinking}</div>}
-        </>
-      )}
-    </div>
-  );
+  surfaceIds: string[];
 }
 
 export function App() {
+  // 会话内固定 contextId → A2A message.contextId → 后端 InMemorySession 复用 = 真·多轮状态。
+  const contextId = useMemo(() => `ctx-${crypto.randomUUID()}`, []);
+  // action 回传用：MessageProcessor 回调里拿最新 send（避免闭包旧值）。
+  const sendRef = useRef<((body: object) => Promise<void>) | null>(null);
   const processor = useMemo(
-    () => new MessageProcessor([evidenceCatalog], action => console.log('action:', action)),
-    [],
+    () =>
+      new MessageProcessor([evidenceCatalog], action => {
+        sendRef.current?.({contextId, action});
+      }),
+    [contextId],
   );
   const [surfaces, setSurfaces] = useState<SurfaceModel<ReactComponentImplementation>[]>([]);
   const [question, setQuestion] = useState('');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [loading, setLoading] = useState(false);
-  // 用 ref 读最新 turns（ask 闭包里避免拿到旧值），供组装追问上下文 history
-  const turnsRef = useRef<Turn[]>([]);
-  turnsRef.current = turns;
 
   useEffect(() => {
     const s1 = processor.onSurfaceCreated(s => setSurfaces(prev => [...prev, s]));
@@ -81,26 +53,22 @@ export function App() {
     };
   }, [processor]);
 
-  const ask = useCallback(
-    async (q: string) => {
+  // 底层发送：body = {contextId, text} 或 {contextId, action}。q 为空表示卡片 action（不新建用户气泡）。
+  const send = useCallback(
+    async (body: object, q?: string) => {
       setLoading(true);
-      // 每轮独立卡片：唯一 surfaceId，后端每轮 createSurface + 全量组件（不再共用一张卡增量 diff）
-      const surfaceId = `card-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-      const history = turnsRef.current.map(t => t.q); // 此前的问题，供 LLM 连续上下文
-      setTurns(prev => [...prev, {q, intro: '', thinking: '', steps: [], done: false, surfaceId}]);
-      // 只改「最后一轮」（即刚追加的这轮）
+      setTurns(prev => [...prev, {q: q ?? '', intro: '', surfaceIds: []}]);
       const patchLast = (upd: (t: Turn) => Partial<Turn>) =>
         setTurns(prev => {
           const c = [...prev];
-          const last = c[c.length - 1];
-          c[c.length - 1] = {...last, ...upd(last)};
+          c[c.length - 1] = {...c[c.length - 1], ...upd(c[c.length - 1])};
           return c;
         });
       try {
         const res = await fetch('/a2a', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({question: q, surface_id: surfaceId, history}),
+          body: JSON.stringify(body),
         });
         const reader = res.body!.getReader();
         const decoder = new TextDecoder();
@@ -114,19 +82,19 @@ export function App() {
             const raw = buf.slice(0, idx).trim();
             buf = buf.slice(idx + 2);
             if (!raw.startsWith('data:')) continue;
-            const evt = JSON.parse(raw.slice(5).trim()) as Part;
-            if (evt.kind === 'status' && evt.text) patchLast(t => ({steps: [...t.steps, evt.text!]}));
-            else if (evt.kind === 'thinking' && evt.delta)
-              patchLast(t => ({thinking: t.thinking + evt.delta}));
-            else if (evt.kind === 'chat' && evt.delta)
-              patchLast(t => ({intro: t.intro + escHtml(evt.delta!)}));
-            else if (evt.kind === 'text' && evt.text) {
-              const html = await renderMarkdown(evt.text);
-              patchLast(() => ({intro: html}));
-            } else if (evt.kind === 'data' && evt.data) {
-              patchLast(() => ({done: true})); // 卡片首条 data 到达 → 折叠思考气泡
-              processor.processMessages([evt.data]);
-            } else if (evt.kind === 'error' && evt.text) patchLast(() => ({intro: evt.text}));
+            const parts = JSON.parse(raw.slice(5).trim()) as Part[];
+            for (const p of parts) {
+              if (p.kind === 'error' && p.text) {
+                patchLast(() => ({intro: `出错了：${p.text}`}));
+              } else if (p.kind === 'text' && p.text) {
+                const html = await renderMarkdown(p.text);
+                patchLast(() => ({intro: html}));
+              } else if (p.kind === 'data' && p.data) {
+                const sid = (p.data as {createSurface?: {surfaceId: string}}).createSurface?.surfaceId;
+                if (sid) patchLast(t => ({surfaceIds: [...t.surfaceIds, sid]}));
+                processor.processMessages([p.data]);
+              }
+            }
           }
         }
       } catch (e) {
@@ -137,6 +105,9 @@ export function App() {
     },
     [processor],
   );
+  sendRef.current = (body: object) => send(body);
+
+  const ask = useCallback((q: string) => send({contextId, text: q}, q), [send, contextId]);
 
   return (
     <MarkdownContext.Provider value={renderMarkdown}>
@@ -175,13 +146,10 @@ export function App() {
           )}
           {turns.map((t, i) => (
             <Fragment key={i}>
-              <div className="bubble user">{t.q}</div>
-              {(t.thinking || t.steps.length > 0) && (
-                <ThinkingBubble thinking={t.thinking} steps={t.steps} done={t.done} />
-              )}
+              {t.q && <div className="bubble user">{t.q}</div>}
               {t.intro && <div className="bubble ai" dangerouslySetInnerHTML={{__html: t.intro}} />}
               {surfaces
-                .filter(s => s.id === t.surfaceId)
+                .filter(s => t.surfaceIds.includes(s.id))
                 .map(s => (
                   <div className="card-wrap" key={s.id}>
                     <A2uiSurface surface={s} />
@@ -189,6 +157,7 @@ export function App() {
                 ))}
             </Fragment>
           ))}
+          {loading && <div className="bubble ai loading-dots">思考中…</div>}
         </main>
 
         <form
