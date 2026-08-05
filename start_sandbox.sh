@@ -3,9 +3,15 @@
 # 沙箱由后端连接池按每租户自动创建，无需在此手动 create。
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "${SCRIPT_DIR}/.env" ]; then
+  set -a; source "${SCRIPT_DIR}/.env"; set +a
+fi
+OSB_PORT="${OSB_PORT:-8080}"
+
 # 幂等：已在跑就直接退出
-if curl -sf http://localhost:8080/health >/dev/null 2>&1; then
-  echo "服务端已在 :8080 运行，无需重复启动。"
+if curl -sf "http://localhost:${OSB_PORT}/health" >/dev/null 2>&1; then
+  echo "服务端已在 :${OSB_PORT} 运行，无需重复启动。"
   exit 0
 fi
 
@@ -15,7 +21,7 @@ SERVER_PID=$!
 
 echo "==> 等待服务端就绪..."
 for i in $(seq 1 30); do
-  if curl -sf http://localhost:8080/health >/dev/null 2>&1; then
+  if curl -sf "http://localhost:${OSB_PORT}/health" >/dev/null 2>&1; then
     echo "    服务端已就绪 (PID: ${SERVER_PID})"
     break
   fi

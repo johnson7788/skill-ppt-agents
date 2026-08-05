@@ -1,8 +1,15 @@
 services:
-  arxiv-research-agent:
-    build: .
-    container_name: arxiv-research-agent
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../Dockerfile
+    container_name: ppt-main
     restart: unless-stopped
+    networks:
+      - mppt
+    # 容器在自建 bridge 网络里，用 host.docker.internal 访问宿主机上的 OpenSandbox。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${PORT:-8046}:8046"
     env_file:
@@ -11,6 +18,8 @@ services:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:?err}
       - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:?err}
       - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:?err}
+      - PORT=8046
+      - SANDBOX_DOMAIN=host.docker.internal:${OSB_PORT:-8080}
       - WORKERS=${WORKERS:-4}
       - TIMEOUT=${TIMEOUT:-600}
       - WORKER_CONNECTIONS=${WORKER_CONNECTIONS:-1000}
@@ -22,3 +31,26 @@ services:
         reservations:
           cpus: "0.5"
           memory: "512M"
+
+  frontend:
+    build: ./frontend
+    container_name: ppt-main-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - mppt
+    ports:
+      - "${FRONTEND_PORT:-3686}:3686"
+    environment:
+      # 通过服务名访问后端容器（compose 内置 DNS）。
+      - BACKEND_URL=http://backend:8046
+      - DISABLE_HMR=true
+
+networks:
+  mppt:
+    driver: bridge
+    ipam:
+      config:
+        # 宿主机默认地址池(172.16-31 / 192.168)已被其它项目占满，显式指定 10.x 网段避开。
+        - subnet: 10.210.0.0/24

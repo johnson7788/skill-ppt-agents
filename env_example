@@ -88,7 +88,10 @@ SANDBOX_ENABLED=true
 SANDBOX_POOL_SIZE=3
 # 沙箱镜像
 SANDBOX_IMAGE=python:3.12
-# OpenSandbox 服务连接
+# OpenSandbox 服务端监听端口（prepare.sh/start_sandbox.sh 使用；docker 部署时 compose 会
+# 据此把容器内 SANDBOX_DOMAIN 指向 host.docker.internal:<OSB_PORT>）。默认 8080，冲突时改端口。
+OSB_PORT=8080
+# OpenSandbox 服务连接（本机直跑时用 localhost:<OSB_PORT>）
 SANDBOX_DOMAIN=localhost:8080
 SANDBOX_PROTOCOL=http
 SANDBOX_API_KEY=123456

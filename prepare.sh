@@ -12,6 +12,10 @@ fi
 
 MIRROR="${OSB_MIRROR:-docker.1ms.run}"
 API_KEY="${OSB_API_KEY:-123456}"
+OSB_PORT="${OSB_PORT:-8080}"
+# 必须与 opensandbox-server 期望的 execd 版本一致，否则每次建沙箱都要冷拉镜像、
+# 30s 超时重试，产生一堆孤儿沙箱容器。当前服务端期望 v1.0.21。
+EXECD_VER="${EXECD_VER:-v1.0.21}"
 CONFIG="${HOME}/.sandbox.toml"
 
 echo "==> 检查 Docker..."
@@ -19,8 +23,8 @@ docker info >/dev/null 2>&1 || { echo "Docker 未运行，请先启动 Docker De
 
 echo "==> 拉取镜像..."
 echo "==> 拉取 execd 镜像（opensandbox 注入每个沙箱的执行守护进程）..."
-docker pull "${MIRROR}/opensandbox/execd:v1.0.20"
-docker tag  "${MIRROR}/opensandbox/execd:v1.0.20" opensandbox/execd:v1.0.20
+docker pull "${MIRROR}/opensandbox/execd:${EXECD_VER}"
+docker tag  "${MIRROR}/opensandbox/execd:${EXECD_VER}" "opensandbox/execd:${EXECD_VER}"
 
 echo "==> 构建沙箱镜像 my-sandbox:latest（python:3.12 + pandoc + 技能脚本）..."
 docker build -t my-sandbox:latest "${SCRIPT_DIR}/sandbox-image"
@@ -30,29 +34,27 @@ if [ ! -f "${CONFIG}" ]; then
   uvx opensandbox-server init-config "${CONFIG}" --example docker
 fi
 # 确保 [server] 包含 host/port/api_key
-python3 - "$CONFIG" "$API_KEY" <<'PY'
+python3 - "$CONFIG" "$API_KEY" "$OSB_PORT" <<'PY'
 import sys, re, pathlib
-path, key = sys.argv[1], sys.argv[2]
+path, key, port = sys.argv[1], sys.argv[2], sys.argv[3]
 t = pathlib.Path(path).read_text()
 if "[server]" not in t:
-    t += f'\n[server]\nhost = "0.0.0.0"\nport = 8080\napi_key = "{key}"\n'
+    t += f'\n[server]\nhost = "0.0.0.0"\nport = {port}\napi_key = "{key}"\n'
 else:
     def ensure(text, k, v):
         pat = re.compile(rf'^{k}\s*=.*$', re.M)
         return pat.sub(f'{k} = {v}', text) if pat.search(text) else re.sub(r'(\[server\][^\[]*)', rf'\1{k} = {v}\n', text, count=1)
     t = ensure(t, "host", '"0.0.0.0"')
-    t = ensure(t, "port", "8080")
+    t = ensure(t, "port", port)
     t = ensure(t, "api_key", f'"{key}"')
 pathlib.Path(path).write_text(t)
 print("配置写入完成")
 PY
 
-echo "==> 配置 CLI..."
-osb config init 2>/dev/null || true
-osb config set connection.domain localhost:8080
-osb config set connection.protocol http
-osb config set connection.api_key "\"${API_KEY}\""
-osb config set connection.request_timeout 180
+# 注：不再配置 osb CLI。应用（backend）通过 OpenSandbox Python SDK 连接，
+# 连接参数走 .env 的 SANDBOX_DOMAIN/SANDBOX_PROTOCOL/SANDBOX_API_KEY，
+# 无需安装 osb 命令行，也无需 ~/.opensandbox/config.toml。
+# ponytail: osb CLI 仅用于手动调试沙箱；需要时 `uv tool install` 单独装。
 
 cat <<EOF
 

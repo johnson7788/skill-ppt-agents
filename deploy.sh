@@ -6,9 +6,9 @@ set -e
 #######################################
 WORK_DIR="$(cd "$(dirname "$0")" && pwd)"
 ENV_FILE=".env"
-BRANCH_NAME="master"
+BRANCH_NAME="main"
 COMPOSE_FILE="docker-compose.yml"
-CONTAINER_NAME="arxiv-research-agent"
+CONTAINER_NAME="ppt-main"
 PORT="${PORT:-8046}"
 
 # ANSI color

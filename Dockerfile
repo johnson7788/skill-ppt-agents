@@ -21,14 +21,27 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && npm config set registry https://registry.npmmirror.com \
     && npm install -g pptxgenjs
 
-# ---- Python dependencies ----
-COPY requirements.txt .
-RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
+# ---- Python dependencies (build context = ./backend) ----
+# 从 pyproject 安装运行依赖 + sandbox extra（opensandbox SDK，SANDBOX_ENABLED=true 需要）。
+COPY pyproject.toml ./
+COPY app/ ./app/
+# gunicorn 仅容器内用于多 worker 起服务（start.sh 本地直跑用 uvicorn），故不入 pyproject。
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple ".[sandbox]" gunicorn
 
-# ---- Application code ----
+# ---- 可编辑 PPT（dashi-ppt skill）Node 依赖 + Chromium ----
+# 该 skill 在 backend 容器内直接 `node <project>/node_modules/.bin/tsx ...` 渲染，
+# 并用 playwright headless-shell 导出 pptx。必须在镜像里预装项目本地依赖和浏览器，
+# 否则运行时报 "Cannot find module .../node_modules/..." 或 "Chrome executable not found"。
+# 浏览器下载走 npmmirror 镜像（国内直连 playwright CDN 常超时）。
+ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+ENV PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright
+RUN cd app/skills/dashi-ppt/project \
+    && npm ci \
+    && node node_modules/playwright-core/cli.js install-deps chromium \
+    && node node_modules/playwright-core/cli.js install chromium chromium-headless-shell
+
+# ---- Application entrypoint ----
 COPY server.py .
-COPY agent.md .
-COPY skills/ ./skills/
 
 EXPOSE 8046
 
