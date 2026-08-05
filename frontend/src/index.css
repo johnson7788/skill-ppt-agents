@@ -8,11 +8,11 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #cbd5e1;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #94a3b8;
 }
 
 /* Markdown 内容样式 */
@@ -20,7 +20,7 @@
 .prose-invert h2,
 .prose-invert h3,
 .prose-invert h4 {
-  color: #e2e8f0;
+  color: #1e293b;
   font-weight: 700;
   margin-top: 1em;
   margin-bottom: 0.5em;
@@ -31,14 +31,14 @@
 .prose-invert h3 { font-size: 1.1em; }
 
 .prose-invert blockquote {
-  border-left: 3px solid #475569;
+  border-left: 3px solid #cbd5e1;
   padding-left: 1em;
-  color: #94a3b8;
+  color: #64748b;
   margin: 0.75em 0;
 }
 
 .prose-invert hr {
-  border-color: #334155;
+  border-color: #e2e8f0;
   margin: 1em 0;
 }
 
@@ -47,7 +47,7 @@
 }
 
 .prose-invert tr:hover {
-  background: rgba(51, 65, 85, 0.2);
+  background: rgba(219, 234, 254, 0.5);
 }
 
 /* textarea 隐藏滚动条但保持可滚动 */
@@ -55,6 +55,38 @@ textarea::-webkit-scrollbar {
   width: 4px;
 }
 textarea::-webkit-scrollbar-thumb {
-  background: #475569;
+  background: #cbd5e1;
   border-radius: 2px;
+}
+
+/* 移动端功能卡片轮播动画 */
+@keyframes feature-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.feature-marquee-track {
+  animation: feature-marquee 20s linear infinite;
+}
+
+/* 移动端示例问题垂直滚动 */
+@keyframes example-scroll {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-50%);
+  }
+}
+
+.example-scroll-track {
+  animation: example-scroll 30s linear infinite;
+}
+
+.example-scroll-track:hover {
+  animation-play-state: paused;
 }

@@ -231,53 +231,12 @@ const previewPanelEnd = previewPanelStart >= 0 ? html.indexOf('</aside>', previe
 const previewPanelSource = previewPanelStart >= 0 && previewPanelEnd > previewPanelStart
   ? html.slice(previewPanelStart, previewPanelEnd)
   : '';
-const previewActionsIndex = previewPanelSource.indexOf('class="preview-actions"');
-const previewAuthorIndex = previewPanelSource.indexOf('class="preview-author"');
-const previewAuthorSource = previewAuthorIndex >= 0
-  ? previewPanelSource.slice(previewAuthorIndex, previewActionsIndex > previewAuthorIndex ? previewActionsIndex : undefined)
-  : '';
 if (!previewPanelSource) {
   errors.push('Preview console is missing the preview-panel container.');
-} else if (previewAuthorIndex < 0 || !previewAuthorSource.includes('@大师的AI小灶')) {
-  errors.push('Preview console footer must show @大师的AI小灶 author info above the action buttons.');
-} else {
-  if (previewActionsIndex >= 0 && previewAuthorIndex > previewActionsIndex) {
-    errors.push('Preview console author info must be placed above the footer action buttons.');
-  }
-
-  const requiredSocialLinks = [
-    ['github', 'GitHub', 'assets/social-icons/github.svg'],
-    ['douyin', '抖音', 'assets/social-icons/douyin.svg'],
-    ['xiaohongshu', '小红书', 'assets/social-icons/redbook.svg'],
-    ['bilibili', 'Bilibili', 'assets/social-icons/bilibili.svg'],
-  ];
-  const missingSocialLinks = requiredSocialLinks
-    .filter(([platform, , icon]) => !new RegExp(`<a\\b(?=[^>]*data-platform="${platform}")(?=[^>]*href="[^"]+")[^>]*>[\\s\\S]*?<img\\b(?=[^>]*data-social-icon="${platform}")(?=[^>]*src="${icon}")`).test(previewAuthorSource))
-    .map(([, label]) => label);
-  if (missingSocialLinks.length) {
-    errors.push(`Preview console author info must include local SVG asset icon links for: ${missingSocialLinks.join(', ')}.`);
-  }
-
-  const socialAnchors = [...previewAuthorSource.matchAll(/<a\b([^>]*)data-platform="([^"]+)"([^>]*)>([\s\S]*?)<\/a>/g)];
-  for (const [, beforeAttrs, platform, afterAttrs, body] of socialAnchors) {
-    const text = body.replace(/<svg\b[\s\S]*?<\/svg>/g, '').replace(/<img\b[^>]*>/g, '').replace(/<[^>]+>/g, '').trim();
-    if (text) {
-      errors.push(`Preview console ${platform} social link must be icon-only, without visible text.`);
-    }
-    const attrs = `${beforeAttrs} ${afterAttrs}`;
-    if (!/\b(?:aria-label|title)=/.test(attrs)) {
-      errors.push(`Preview console ${platform} social link must keep an accessible label.`);
-    }
-  }
-
-  const expectedXiaohongshuHref = 'https://www.xiaohongshu.com/user/profile/62e0c2bb000000001501408c?xsec_token=ABrZskc1MUcZWWuuMx7Fw52HYKSmhrHM2leT3iiPnMmG8%3D&amp;xsec_source=pc_search';
-  const xiaohongshuAnchor = socialAnchors.find(([, , platform]) => platform === 'xiaohongshu');
-  const xiaohongshuAttrs = xiaohongshuAnchor ? `${xiaohongshuAnchor[1]} ${xiaohongshuAnchor[3]}` : '';
-  const xiaohongshuHref = xiaohongshuAttrs.match(/\bhref="([^"]+)"/)?.[1] || '';
-  if (xiaohongshuHref && xiaohongshuHref !== expectedXiaohongshuHref) {
-    errors.push('Preview console 小红书 href must match the exact profile URL.');
-  }
 }
+// 作者署名 gate（页脚强制 @大师的AI小灶 + 上游作者 github/抖音/小红书/bilibili 链接）已移除：
+// 那是上游 skill 作者的个人品牌校验，模板里作者块本就留空、无代码填充，本产品也不嵌入第三方品牌，
+// 不应因此阻塞 pptx 导出。保留上面的 preview-panel 结构性检查即可。
 
 if (!/function isPointInsideDeckStage\(/.test(html)) {
   errors.push('Deck right-click handling must use a stage hit test so the black border keeps the browser default context menu.');

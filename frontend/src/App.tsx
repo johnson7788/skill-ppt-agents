@@ -3,7 +3,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   ArrowUp,
-  Bot,
   Brain,
   CheckCircle2,
   ChevronDown,
@@ -13,18 +12,26 @@ import {
   Eye,
   FileText,
   FolderOpen,
+  Home,
+  ImageIcon,
   HelpCircle,
   Loader2,
+  Menu,
   PanelLeftClose,
   PanelLeftOpen,
   Paperclip,
+  Palette,
   RefreshCw,
   Search,
+  Send,
+  ShieldCheck,
+  Sparkles,
   Square,
   Terminal,
   Trash2,
   Upload,
   User,
+  Wand2,
   Wrench,
   XCircle,
 } from 'lucide-react';
@@ -140,9 +147,11 @@ const EXAMPLE_QUESTIONS: ExampleQuestion[] = [
 function Header({
   userId,
   onUserIdChange,
+  onOpenFiles,
 }: {
   userId: string;
   onUserIdChange: (id: string) => void;
+  onOpenFiles: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(userId);
@@ -153,11 +162,18 @@ function Header({
   }, [editing]);
 
   return (
-    <header className="flex items-center gap-2 px-4 py-3 border-b border-slate-800 text-sm font-medium text-slate-300">
-      <Bot className="w-5 h-5 text-blue-400" />
-      <span className="font-semibold text-slate-200">PPT</span>
+    <header className="h-[52px] md:h-[76px] flex items-center gap-1.5 md:gap-2 px-3 md:px-8 border-b border-slate-200/80 bg-white/75 backdrop-blur-xl text-[13px] md:text-sm font-medium text-slate-700 shrink-0">
+      <button
+        onClick={onOpenFiles}
+        title="打开文件栏"
+        className="md:hidden mr-1 p-1.5 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+      <Home className="hidden sm:block w-5 h-5 text-blue-600" />
+      <span className="font-bold text-slate-900">PPT</span>
       <ChevronRight className="w-4 h-4 text-slate-500" />
-      <span className="text-slate-400">PPT 生成智能体</span>
+      <span className="text-slate-700 font-semibold truncate">PPT 生成智能体</span>
       <div className="ml-auto flex items-center gap-2">
         {editing ? (
           <input
@@ -178,7 +194,7 @@ function Header({
                 setEditing(false);
               }
             }}
-            className="bg-[#0b0f19] border border-slate-700 rounded px-2 py-1 text-[13px] text-slate-200 outline-none w-36"
+            className="bg-[#f1f5f9] border border-slate-200 rounded px-2 py-1 text-[13px] text-slate-800 outline-none w-36"
           />
         ) : (
           <button
@@ -186,7 +202,7 @@ function Header({
               setValue(userId);
               setEditing(true);
             }}
-            className="flex items-center gap-1.5 text-[12px] text-slate-500 hover:text-slate-300 transition-colors bg-slate-800/40 hover:bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700/50"
+            className="flex items-center gap-1.5 text-[11px] md:text-[12px] text-slate-500 hover:text-slate-700 transition-colors bg-slate-100/40 hover:bg-slate-100 px-2 md:px-2.5 py-1 rounded-lg border border-slate-200/50"
           >
             <User className="w-3.5 h-3.5" />
             {userId}
@@ -197,14 +213,211 @@ function Header({
   );
 }
 
+const HERO_FEATURES = [
+  {
+    title: '多样化模板与风格',
+    body: '提供多种专业模板与设计风格，满足不同场景需求',
+    icon: <Wand2 className="w-5 h-5 md:w-8 md:h-8" />,
+    tone: 'blue',
+  },
+  {
+    title: '智能内容生成',
+    body: '基于你的需求，自动生成逻辑清晰、内容专业的 PPT',
+    icon: <Sparkles className="w-5 h-5 md:w-8 md:h-8" />,
+    tone: 'violet',
+  },
+  {
+    title: '专业视觉呈现',
+    body: '智能匹配配色与排版，打造高颜值演示文稿',
+    icon: <ImageIcon className="w-5 h-5 md:w-8 md:h-8" />,
+    tone: 'emerald',
+  },
+  {
+    title: '数据安全可靠',
+    body: '支持企业私有化部署，保障数据安全与隐私',
+    icon: <ShieldCheck className="w-5 h-5 md:w-8 md:h-8" />,
+    tone: 'orange',
+  },
+] as const;
+
+function FeatureCard({
+  feature,
+}: {
+  feature: (typeof HERO_FEATURES)[number];
+}) {
+  const toneClass = {
+    blue: {
+      card: 'border-blue-100/80 bg-white/80',
+      icon: 'bg-blue-100 text-blue-600',
+      line: 'bg-blue-500',
+    },
+    violet: {
+      card: 'border-violet-100/80 bg-white/80',
+      icon: 'bg-violet-100 text-violet-600',
+      line: 'bg-violet-500',
+    },
+    emerald: {
+      card: 'border-emerald-100/80 bg-white/80',
+      icon: 'bg-emerald-100 text-emerald-500',
+      line: 'bg-emerald-400',
+    },
+    orange: {
+      card: 'border-orange-100/80 bg-white/80',
+      icon: 'bg-orange-100 text-orange-500',
+      line: 'bg-orange-400',
+    },
+  }[feature.tone];
+
+  return (
+    <div
+      className={`w-[132px] shrink-0 rounded-2xl md:w-auto md:shrink md:rounded-[22px] border shadow-[0_12px_28px_rgba(49,82,166,0.1)] md:shadow-[0_18px_44px_rgba(49,82,166,0.13)] backdrop-blur-md px-3 py-3.5 md:px-7 md:py-6 text-center ${toneClass.card}`}
+    >
+      <div className={`mx-auto w-9 h-9 md:w-[58px] md:h-[58px] rounded-full flex items-center justify-center mb-2.5 md:mb-4 ${toneClass.icon}`}>
+        {feature.icon}
+      </div>
+      <h3 className="text-[13px] md:text-[22px] font-black text-[#08256f] leading-snug">
+        {feature.title}
+      </h3>
+      <p className="mt-1.5 md:mt-3 text-[10px] md:text-[16px] leading-relaxed text-[#526996]">
+        {feature.body}
+      </p>
+      <div className={`mx-auto mt-2.5 md:mt-4 h-1 w-10 md:w-16 rounded-full ${toneClass.line}`} />
+    </div>
+  );
+}
+
+function WelcomeHero({
+  examples,
+  onExampleClick,
+  disabled,
+}: {
+  examples: ExampleQuestion[];
+  onExampleClick: (ex: ExampleQuestion) => void;
+  disabled: boolean;
+}) {
+  return (
+    <section className="relative min-h-full overflow-hidden px-4 pt-4 pb-3 md:px-8 md:pt-7 md:pb-5">
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute inset-x-0 top-0 h-[42%] bg-[linear-gradient(152deg,rgba(219,234,254,0.95),rgba(255,255,255,0.72)_54%,rgba(233,231,255,0.95))]" />
+        <div className="absolute -top-10 left-[-6%] h-48 md:h-72 w-[62%] rounded-[50%] bg-blue-100/60 blur-2xl" />
+        <div className="absolute top-20 md:top-24 right-[-8%] h-48 md:h-72 w-[46%] rounded-[50%] bg-violet-100/70 blur-2xl" />
+        <div className="absolute top-[12%] left-0 right-0 h-px bg-white/80 rotate-[-12deg]" />
+      </div>
+
+      <div className="relative mx-auto flex min-h-full max-w-[1280px] flex-col items-center text-center">
+        <div className="hidden md:flex relative mb-2 h-[112px] w-[150px] items-center justify-center">
+          <div className="absolute bottom-2 h-8 w-32 rounded-full bg-blue-500/10 blur-md" />
+          <div className="relative h-[92px] w-[86px] rounded-[18px] bg-[linear-gradient(135deg,#4f83ff,#7c3df2)] shadow-[0_18px_42px_rgba(78,111,255,0.28)] flex items-center justify-center">
+            <div className="absolute right-0 top-0 h-7 w-7 rounded-bl-xl bg-white/20" />
+            <span className="text-5xl font-black text-white">P</span>
+          </div>
+        </div>
+
+        <h1 className="mt-1 text-[32px] leading-none md:text-[68px] font-black text-[#08256f]">
+          PPT 生成智能体
+        </h1>
+        <p className="mt-3 md:mt-4 text-[13px] md:text-[24px] font-bold text-[#5c6f9b]">
+          选风格 · 定模板 · 一句话生成专业PPT
+          <span className="hidden md:inline"> ｜ 图文并茂 · 逻辑清晰 · 设计精美</span>
+        </p>
+
+        {/* 移动端：特色卡片水平轮播 */}
+        <div className="mt-5 -mx-4 w-[calc(100%+2rem)] overflow-hidden md:hidden">
+          <div className="feature-marquee-track flex w-max gap-3 px-4 pb-2">
+            {[...HERO_FEATURES, ...HERO_FEATURES].map((feature, index) => (
+              <FeatureCard key={`${feature.title}-${index}`} feature={feature} />
+            ))}
+          </div>
+        </div>
+
+        {/* PC 端：特色卡片网格 */}
+        <div className="hidden md:mt-10 md:grid md:w-full md:grid-cols-4 md:gap-6">
+          {HERO_FEATURES.map((feature) => (
+            <FeatureCard key={feature.title} feature={feature} />
+          ))}
+        </div>
+
+        {/* 移动端：标语 */}
+        <div className="md:hidden mt-4 flex items-center justify-center gap-2 text-[#3456d9]">
+          <Sparkles className="w-3.5 h-3.5 shrink-0" />
+          <span className="text-[12px] font-black">让专业的 PPT 制作更简单 · 更高效 · 更出色</span>
+        </div>
+
+        {/* PC 端：标语 */}
+        <div className="mt-6 hidden w-full items-center justify-center gap-8 text-[#3456d9] md:flex">
+          <div className="h-px w-56 bg-blue-200" />
+          <div className="flex items-center gap-3 text-[22px] font-black">
+            <Sparkles className="w-6 h-6" />
+            让专业的 PPT 制作更简单 · 更高效 · 更出色
+          </div>
+          <div className="h-px w-56 bg-blue-200" />
+        </div>
+
+        {/* 移动端：示例问题向上轮播 */}
+        <div className="md:hidden mt-4 w-full overflow-hidden rounded-2xl" style={{ height: 84 }}>
+          <div className="example-scroll-track flex flex-col">
+            {examples.map((ex, i) => (
+              <button
+                key={i}
+                className="w-full flex items-center gap-2 px-4 py-3 text-left text-[12px] font-semibold leading-snug text-slate-600 border-b border-slate-100 last:border-b-0 active:bg-blue-50 transition-colors"
+                onClick={() => onExampleClick(ex)}
+                disabled={disabled}
+              >
+                {ex.demoFile ? (
+                  <FileText className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5 shrink-0 text-blue-500" />
+                )}
+                <span className="line-clamp-1">{ex.question}</span>
+              </button>
+            ))}
+            {examples.map((ex, i) => (
+              <button
+                key={`dup-${i}`}
+                className="w-full flex items-center gap-2 px-4 py-3 text-left text-[12px] font-semibold leading-snug text-slate-600 border-b border-slate-100 last:border-b-0 active:bg-blue-50 transition-colors"
+                onClick={() => onExampleClick(ex)}
+                disabled={disabled}
+              >
+                {ex.demoFile ? (
+                  <FileText className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5 shrink-0 text-blue-500" />
+                )}
+                <span className="line-clamp-1">{ex.question}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* PC 端：示例问题按钮 */}
+        <div className="mt-5 hidden max-w-5xl flex-wrap justify-center gap-2 md:flex">
+          {examples.slice(0, 4).map((ex, i) => (
+            <button
+              key={i}
+              className="group inline-flex max-w-[420px] items-center gap-2 rounded-full border border-blue-100 bg-white/70 px-4 py-2 text-left text-[13px] font-semibold leading-snug text-slate-600 shadow-sm hover:border-blue-200 hover:bg-white hover:text-blue-700 transition-colors"
+              onClick={() => onExampleClick(ex)}
+              disabled={disabled}
+            >
+              {ex.demoFile ? (
+                <FileText className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+              ) : (
+                <Sparkles className="w-3.5 h-3.5 shrink-0 text-blue-500" />
+              )}
+              <span className="truncate">{ex.question}</span>
+            </button>
+          ))}
+        </div>
+
+      </div>
+    </section>
+  );
+}
+
 function UserMessage({ text }: { text: string }) {
   return (
-    <div className="flex justify-end gap-3 mb-6 w-full max-w-4xl mx-auto px-4">
-      <div className="bg-[#2563eb] text-white px-5 py-4 rounded-2xl rounded-tr-sm max-w-3xl leading-relaxed text-[15px] shadow-sm whitespace-pre-wrap">
+    <div className="flex justify-end mb-5 w-full max-w-[1180px] mx-auto px-4 md:px-8">
+      <div className="bg-[#2563eb] text-white px-5 py-4 rounded-2xl rounded-tr-sm max-w-[min(820px,92%)] leading-relaxed text-[15px] shadow-sm whitespace-pre-wrap">
         {text}
-      </div>
-      <div className="flex-shrink-0 w-8 h-8 bg-purple-900/80 rounded-full flex items-center justify-center border border-purple-700/50">
-        <User className="w-5 h-5 text-purple-200" />
       </div>
     </div>
   );
@@ -231,28 +444,28 @@ function SubCallRow({ call }: { call: ToolCall }) {
     <div className="py-1.5">
       <div className="flex items-center gap-2 text-[13px]">
         {call.status === 'running' ? (
-          <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin flex-shrink-0" />
+          <Loader2 className="w-3.5 h-3.5 text-amber-600 animate-spin flex-shrink-0" />
         ) : call.status === 'error' ? (
-          <XCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+          <XCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
         ) : (
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
         )}
-        <span className="text-slate-400">{getToolIcon(call.tool_name)}</span>
-        <span className="text-slate-300 font-medium">{call.display_name}</span>
+        <span className="text-slate-600">{getToolIcon(call.tool_name)}</span>
+        <span className="text-slate-700 font-medium">{call.display_name}</span>
         <span
           className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${
             call.status === 'running'
-              ? 'bg-amber-500/10 text-amber-400'
+              ? 'bg-amber-500/10 text-amber-600'
               : call.status === 'error'
-                ? 'bg-red-500/10 text-red-400'
-                : 'bg-emerald-500/10 text-emerald-400'
+                ? 'bg-red-500/10 text-red-600'
+                : 'bg-emerald-500/10 text-emerald-600'
           }`}
         >
           {call.status === 'running' ? '执行中...' : call.status === 'error' ? '错误' : '完成'}
         </span>
         {!isTodo && hasResult && (
           <button
-            className="ml-auto text-[11px] text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-0.5"
+            className="ml-auto text-[11px] text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-0.5"
             onClick={() => setShowResult(!showResult)}
           >
             {showResult ? (
@@ -272,7 +485,7 @@ function SubCallRow({ call }: { call: ToolCall }) {
 
       {/* 推理说明（始终显示） */}
       {hasArgs && (
-        <div className="mt-1.5 ml-5.5 text-[13px] text-slate-400 leading-relaxed">
+        <div className="mt-1.5 ml-5.5 text-[13px] text-slate-600 leading-relaxed">
           {call.args_summary}
         </div>
       )}
@@ -289,8 +502,8 @@ function SubCallRow({ call }: { call: ToolCall }) {
         <div className="mt-2 ml-5.5">
           <pre className={`text-[12px] rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-all font-mono leading-relaxed max-h-80 overflow-y-auto ${
             call.status === 'error'
-              ? 'bg-red-950/30 text-red-300'
-              : 'bg-slate-900/50 text-slate-400'
+              ? 'bg-red-50/30 text-red-500'
+              : 'bg-white/50 text-slate-600'
           }`}>
             {call.result_summary}
           </pre>
@@ -311,9 +524,9 @@ interface TodoItem {
 function TodoIcon({ status }: { status: TodoItem['status'] }) {
   switch (status) {
     case 'completed':
-      return <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />;
+      return <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />;
     case 'in_progress':
-      return <Loader2 className="w-4 h-4 text-blue-400 animate-spin shrink-0" />;
+      return <Loader2 className="w-4 h-4 text-blue-600 animate-spin shrink-0" />;
     case 'cancelled':
       return <XCircle className="w-4 h-4 text-slate-500 shrink-0" />;
     default:
@@ -329,12 +542,12 @@ function TodoCard({ todos }: { todos: TodoItem[] }) {
           key={t.id}
           className={`flex items-start gap-2.5 px-3 py-2 rounded-lg text-[13px] ${
             t.status === 'completed'
-              ? 'text-slate-400 line-through'
+              ? 'text-slate-600 line-through'
               : t.status === 'cancelled'
                 ? 'text-slate-500 line-through'
                 : t.status === 'in_progress'
-                  ? 'text-slate-200 bg-blue-500/5 border border-blue-500/10'
-                  : 'text-slate-300'
+                  ? 'text-slate-800 bg-blue-500/5 border border-blue-500/10'
+                  : 'text-slate-700'
           }`}
         >
           <TodoIcon status={t.status} />
@@ -356,19 +569,19 @@ function ToolStepCard({ step }: { step: ToolStep }) {
     : `${toolNames[0]} + 等 ${toolNames.length - 1} 个工具`;
 
   return (
-    <div className="bg-[#151b28] border border-slate-800/80 rounded-xl overflow-hidden">
+    <div className="bg-[#ffffff] border border-slate-200/80 rounded-xl overflow-hidden">
       <div
-        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-slate-800/30 transition-colors"
+        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-slate-100/30 transition-colors"
         onClick={() => setOpen(!open)}
       >
-        <div className="flex items-center gap-3 text-[14px] text-slate-300">
+        <div className="flex items-center gap-3 text-[14px] text-slate-700">
           {open ? (
             <ChevronDown className="w-4 h-4 text-slate-500" />
           ) : (
             <ChevronRight className="w-4 h-4 text-slate-500" />
           )}
           {hasRunning ? (
-            <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+            <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
           ) : (
             getToolIcon(step.calls[0]?.tool_name || '')
           )}
@@ -378,7 +591,7 @@ function ToolStepCard({ step }: { step: ToolStep }) {
       </div>
       {open && step.calls.length > 0 && (
         <div className="px-5 pb-3 pt-1">
-          <div className="border-l-2 border-slate-800/80 pl-4 py-1 space-y-1">
+          <div className="border-l-2 border-slate-200/80 pl-4 py-1 space-y-1">
             {step.calls.map((call) => (
               <SubCallRow key={call.id} call={call} />
             ))}
@@ -398,7 +611,7 @@ function ThoughtCard({ thought, thinking = false }: { thought: ThoughtItem; thin
   return (
     <div className="inline-flex flex-col max-w-full">
       <div
-        className="inline-flex items-center gap-2 px-4 py-2 bg-[#1e1b4b]/40 border border-indigo-500/30 rounded-lg text-indigo-300 text-[14px] font-medium cursor-pointer hover:bg-[#1e1b4b]/60 transition-colors w-max"
+        className="inline-flex items-center gap-2 px-4 py-2 bg-[#eef2ff]/40 border border-indigo-300/30 rounded-lg text-indigo-600 text-[14px] font-medium cursor-pointer hover:bg-[#eef2ff]/60 transition-colors w-max"
         onClick={() => setOpen(!open)}
       >
         {open ? (
@@ -413,13 +626,13 @@ function ThoughtCard({ thought, thinking = false }: { thought: ThoughtItem; thin
         )}
         <span>{thinking ? '思考中...' : '思考过程'}</span>
         {thought.narrated && (
-          <span className="text-[12px] text-indigo-400/70 truncate max-w-xs">
+          <span className="text-[12px] text-indigo-600/70 truncate max-w-xs">
             {thought.narrated}
           </span>
         )}
       </div>
       {open && (
-        <div className="mt-1 px-4 py-3 bg-[#1e1b4b]/20 border border-indigo-500/20 rounded-lg text-[13px] text-slate-400 leading-relaxed whitespace-pre-wrap max-w-2xl">
+        <div className="mt-1 px-4 py-3 bg-[#eef2ff]/20 border border-indigo-300/20 rounded-lg text-[13px] text-slate-600 leading-relaxed whitespace-pre-wrap max-w-2xl">
           {thought.raw.replace(/\s+/g, ' ').trim()}
         </div>
       )}
@@ -433,11 +646,8 @@ function AssistantMessage({ msg }: { msg: HistoryMessage }) {
   const totalTexts = msg.timeline?.filter((t) => t.kind === 'text').length ?? 0;
 
   return (
-    <div className="flex gap-4 w-full max-w-4xl mx-auto px-4 mb-6">
-      <div className="w-8 h-8 bg-[#1e293b] rounded-full flex items-center justify-center border border-slate-700/50 flex-shrink-0 mt-1">
-        <Bot className="w-4 h-4 text-blue-400" />
-      </div>
-      <div className="flex-1 flex flex-col gap-2 min-w-0">
+    <div className="w-full max-w-[1180px] mx-auto px-4 md:px-8 mb-5">
+      <div className="flex flex-col gap-2 min-w-0">
         {/* 优先按时序渲染 */}
         {msg.timeline && msg.timeline.length > 0 ? (
           msg.timeline.map((item, i) => {
@@ -451,11 +661,11 @@ function AssistantMessage({ msg }: { msg: HistoryMessage }) {
                 <div key={`tx-${i}`}>
                   {isFinal && (
                     <div className="flex items-center gap-2 mb-1.5 px-1">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      <span className="text-[13px] font-medium text-emerald-400">最终结果</span>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span className="text-[13px] font-medium text-emerald-600">最终结果</span>
                     </div>
                   )}
-                  <div className="bg-[#151b28] border border-slate-800/80 rounded-xl p-6 text-[15px] text-slate-200 prose-invert">
+                  <div className="bg-[#ffffff] border border-slate-200/80 rounded-xl p-6 text-[15px] text-slate-800 prose-invert">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
@@ -465,7 +675,7 @@ function AssistantMessage({ msg }: { msg: HistoryMessage }) {
                           </div>
                         ),
                         thead: ({ children }) => (
-                          <thead className="border-b border-slate-700/60 text-slate-400 text-[14px]">
+                          <thead className="border-b border-slate-200/60 text-slate-600 text-[14px]">
                             {children}
                           </thead>
                         ),
@@ -473,7 +683,7 @@ function AssistantMessage({ msg }: { msg: HistoryMessage }) {
                           <th className="py-3 px-4 font-medium">{children}</th>
                         ),
                         td: ({ children }) => (
-                          <td className="py-3 px-4 text-slate-300 border-b border-slate-800/40">
+                          <td className="py-3 px-4 text-slate-700 border-b border-slate-200/40">
                             {children}
                           </td>
                         ),
@@ -481,13 +691,13 @@ function AssistantMessage({ msg }: { msg: HistoryMessage }) {
                           const isBlock = className?.includes('language-');
                           if (isBlock) {
                             return (
-                              <pre className="bg-[#0b0f19] border border-slate-800 rounded-lg p-4 overflow-x-auto text-[13px]">
+                              <pre className="bg-[#f1f5f9] border border-slate-200 rounded-lg p-4 overflow-x-auto text-[13px]">
                                 <code>{children}</code>
                               </pre>
                             );
                           }
                           return (
-                            <code className="bg-[#1e293b] text-blue-300 px-2 py-0.5 rounded text-[13px] border border-slate-700/50">
+                            <code className="bg-[#eff6ff] text-blue-700 px-2 py-0.5 rounded text-[13px] border border-slate-200/50">
                               {children}
                             </code>
                           );
@@ -497,7 +707,7 @@ function AssistantMessage({ msg }: { msg: HistoryMessage }) {
                             href={href}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-blue-400 hover:text-blue-300 underline"
+                            className="text-blue-600 hover:text-blue-700 underline"
                           >
                             {children}
                           </a>
@@ -510,7 +720,7 @@ function AssistantMessage({ msg }: { msg: HistoryMessage }) {
                           <ol className="list-decimal pl-5 space-y-1 mb-3">{children}</ol>
                         ),
                         strong: ({ children }) => (
-                          <strong className="text-slate-100 font-bold">{children}</strong>
+                          <strong className="text-slate-900 font-bold">{children}</strong>
                         ),
                       }}
                     >
@@ -533,7 +743,7 @@ function AssistantMessage({ msg }: { msg: HistoryMessage }) {
               <ThoughtCard key={i} thought={t} />
             ))}
             {msg.text && (
-              <div className="bg-[#151b28] border border-slate-800/80 rounded-xl p-6 text-[15px] text-slate-200 prose-invert">
+              <div className="bg-[#ffffff] border border-slate-200/80 rounded-xl p-6 text-[15px] text-slate-800 prose-invert">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
               </div>
             )}
@@ -569,11 +779,8 @@ function LiveAgentRow({
   };
 
   return (
-    <div className="flex gap-4 w-full max-w-4xl mx-auto px-4 mb-6">
-      <div className="w-8 h-8 bg-[#1e293b] rounded-full flex items-center justify-center border border-slate-700/50 flex-shrink-0 mt-1">
-        <Bot className="w-4 h-4 text-blue-400" />
-      </div>
-      <div className="flex-1 flex flex-col gap-2 min-w-0">
+    <div className="w-full max-w-[1180px] mx-auto px-4 md:px-8 mb-5">
+      <div className="flex flex-col gap-2 min-w-0">
         {/* 时序渲染已刷入的内容 */}
         {timeline.map((item, i) => {
           if (item.kind === 'thought') {
@@ -588,7 +795,7 @@ function LiveAgentRow({
             return (
               <div
                 key={`tx-${i}`}
-                className="bg-[#151b28] border border-slate-800/80 rounded-xl p-6 text-[15px] text-slate-200"
+                className="bg-[#ffffff] border border-slate-200/80 rounded-xl p-6 text-[15px] text-slate-800"
               >
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.text}</ReactMarkdown>
               </div>
@@ -599,15 +806,15 @@ function LiveAgentRow({
 
         {/* 状态指示：流式中且还没有正在显示的文本 */}
         {isStreaming && !displayedText && (
-          <div className="flex items-center gap-2 px-4 py-3 bg-[#151b28] border border-slate-800/80 rounded-xl text-[14px] text-slate-400">
-            <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+          <div className="flex items-center gap-2 px-4 py-3 bg-[#ffffff] border border-slate-200/80 rounded-xl text-[14px] text-slate-600">
+            <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
             {getStatusText()}
           </div>
         )}
 
         {/* 正在流式输出的文字（还未刷入 timeline） */}
         {displayedText && (
-          <div className="bg-[#151b28] border border-slate-800/80 rounded-xl p-6 text-[15px] text-slate-200">
+          <div className="bg-[#ffffff] border border-slate-200/80 rounded-xl p-6 text-[15px] text-slate-800">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayedText}</ReactMarkdown>
             {isStreaming && (
               <span className="inline-block w-0.5 h-4 bg-blue-500 ml-0.5 animate-pulse align-text-bottom" />
@@ -631,17 +838,14 @@ function ClarifyCard({
   const [custom, setCustom] = useState('');
 
   return (
-    <div className="flex gap-4 w-full max-w-4xl mx-auto px-4 mb-6">
-      <div className="w-8 h-8 bg-[#1e293b] rounded-full flex items-center justify-center border border-slate-700/50 flex-shrink-0 mt-1">
-        <HelpCircle className="w-4 h-4 text-amber-400" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="bg-[#1c1a12] border border-amber-500/30 rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-3 text-[13px] font-medium text-amber-400">
+    <div className="w-full max-w-[1180px] mx-auto px-4 md:px-8 mb-5">
+      <div className="min-w-0">
+        <div className="bg-[#fffbeb] border border-amber-400/30 rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-3 text-[13px] font-medium text-amber-600">
             <HelpCircle className="w-4 h-4" />
             需要你确认
           </div>
-          <div className="text-[15px] text-slate-200 mb-4 whitespace-pre-wrap">
+          <div className="text-[15px] text-slate-800 mb-4 whitespace-pre-wrap">
             {clarify.question}
           </div>
           {clarify.choices.length > 0 && (
@@ -651,7 +855,7 @@ function ClarifyCard({
                   key={i}
                   disabled={disabled}
                   onClick={() => onAnswer(choice)}
-                  className="px-4 py-2 text-[14px] rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 hover:bg-amber-500/20 hover:border-amber-500/50 transition-colors disabled:opacity-40"
+                  className="px-4 py-2 text-[14px] rounded-lg bg-amber-500/10 border border-amber-400/30 text-amber-700 hover:bg-amber-500/20 hover:border-amber-400/50 transition-colors disabled:opacity-40"
                 >
                   {choice}
                 </button>
@@ -672,7 +876,7 @@ function ClarifyCard({
                 }
               }}
               placeholder="或输入你的回答..."
-              className="flex-1 bg-[#0b0f19] border border-slate-700/60 focus:border-amber-500/50 rounded-lg text-[14px] text-slate-200 placeholder:text-slate-500 resize-none outline-none py-2.5 px-3 max-h-32 min-h-[42px]"
+              className="flex-1 bg-[#f1f5f9] border border-slate-200/60 focus:border-amber-400/50 rounded-lg text-[14px] text-slate-800 placeholder:text-slate-500 resize-none outline-none py-2.5 px-3 max-h-32 min-h-[42px]"
             />
             <button
               disabled={disabled || !custom.trim()}
@@ -721,11 +925,11 @@ function DeckSidebar({
     `/download?user_id=${encodeURIComponent(userId)}&file=${encodeURIComponent(name)}`;
   if (!open) {
     return (
-      <div className="w-11 shrink-0 border-r border-slate-800 bg-[#0b0f19] flex flex-col items-center py-3">
+      <div className="hidden md:flex w-12 shrink-0 border-r border-slate-200/80 bg-[#f3f7ff] flex-col items-center py-4">
         <button
           onClick={onToggle}
           title="展开文件栏"
-          className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 rounded-lg"
+          className="p-2 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl transition-colors"
         >
           <PanelLeftOpen className="w-5 h-5" />
         </button>
@@ -733,30 +937,33 @@ function DeckSidebar({
     );
   }
   return (
-    <div className="w-64 shrink-0 border-r border-slate-800 bg-[#0b0f19] flex flex-col">
-      <div className="flex items-center gap-2 px-3 py-3 border-b border-slate-800">
-        <FolderOpen className="w-4 h-4 text-blue-400" />
-        <span className="text-sm font-medium text-slate-300">我的文件</span>
+    <>
+      {/* 手机上展开时用遮罩层浮层覆盖聊天区（桌面 md+ 恢复为并排静态栏） */}
+      <div onClick={onToggle} className="md:hidden fixed inset-0 bg-slate-950/35 backdrop-blur-[2px] z-30" />
+      <div className="fixed inset-y-0 left-0 z-40 w-[82vw] max-w-[320px] shadow-2xl md:static md:z-auto md:w-[328px] md:max-w-none md:shadow-none shrink-0 border-r border-slate-200/80 bg-[#f3f7ff] flex flex-col">
+      <div className="flex items-center gap-2 px-4 py-4 md:py-5 border-b border-slate-200/80">
+        <FolderOpen className="w-4 h-4 text-blue-600" />
+        <span className="text-[15px] md:text-lg font-black text-slate-900">我的文件</span>
         <div className="ml-auto flex items-center gap-1">
           <button
             onClick={onRefresh}
             title="刷新"
-            className="p-1.5 text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 rounded-lg"
+            className="p-2 text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded-xl transition-colors"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={onToggle}
             title="收起"
-            className="p-1.5 text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 rounded-lg"
+            className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100/70 rounded-xl transition-colors"
           >
             <PanelLeftClose className="w-4 h-4" />
           </button>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto p-2 space-y-1">
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {decks.length === 0 && !loading && (
-          <div className="text-[12px] text-slate-500 text-center px-2 py-8 leading-relaxed">
+          <div className="text-[13px] text-slate-500 text-center px-4 py-10 leading-relaxed">
             还没有文件。
             <br />
             上传文件或让 AI 生成 PPT 都会出现在这里。
@@ -767,27 +974,27 @@ function DeckSidebar({
           return (
             <div
               key={d.name}
-              className="group rounded-lg border border-slate-800/80 bg-[#151b28] hover:border-slate-700 transition-colors"
+              className="group rounded-2xl border border-slate-200/80 bg-white/90 shadow-[0_10px_26px_rgba(49,82,166,0.07)] hover:border-blue-200 hover:bg-white transition-colors"
             >
               <button
                 onClick={() => canPreview && onPreview(d)}
                 disabled={!canPreview}
-                className={`w-full text-left px-3 pt-2.5 pb-1.5 ${canPreview ? '' : 'cursor-default'}`}
+                className={`w-full text-left px-4 pt-4 pb-2 ${canPreview ? '' : 'cursor-default'}`}
                 title={canPreview ? `预览 ${d.name}` : d.name}
               >
                 <div className="flex items-start gap-2">
-                  <FileText className="w-4 h-4 text-blue-400/70 shrink-0 mt-0.5" />
-                  <span className="text-[13px] text-slate-300 leading-snug break-all line-clamp-2">
+                  <FileText className="w-4 h-4 text-blue-600/80 shrink-0 mt-0.5" />
+                  <span className="text-[14px] md:text-[15px] font-bold text-[#07164f] leading-snug break-all line-clamp-2">
                     {d.name}
                   </span>
                 </div>
-                <div className="text-[11px] text-slate-500 mt-1 ml-6">{formatSize(d.size)}</div>
+                <div className="text-[12px] text-[#526996] mt-2 ml-6">{formatSize(d.size)}</div>
               </button>
-              <div className="flex items-center gap-1 px-2 pb-2 ml-4">
+              <div className="flex items-center gap-2 px-4 pb-4 ml-5">
                 {canPreview && (
                   <button
                     onClick={() => onPreview(d)}
-                    className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-blue-300 px-1.5 py-1 rounded hover:bg-slate-800/60"
+                    className="flex items-center gap-1 text-[12px] font-semibold text-slate-600 hover:text-blue-700 px-1.5 py-1 rounded-lg hover:bg-blue-50"
                     title="在线预览"
                   >
                     <Eye className="w-3.5 h-3.5" /> 预览
@@ -796,14 +1003,14 @@ function DeckSidebar({
                 <a
                   href={downloadHref(d.name)}
                   download
-                  className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-emerald-300 px-1.5 py-1 rounded hover:bg-slate-800/60"
+                  className="flex items-center gap-1 text-[12px] font-semibold text-slate-600 hover:text-emerald-700 px-1.5 py-1 rounded-lg hover:bg-emerald-50"
                   title="下载"
                 >
                   <Download className="w-3.5 h-3.5" /> 下载
                 </a>
                 <button
                   onClick={() => onDelete(d)}
-                  className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-red-400 px-1.5 py-1 rounded hover:bg-slate-800/60 ml-auto"
+                  className="flex items-center gap-1 text-[12px] text-slate-500 hover:text-red-600 px-1.5 py-1 rounded-lg hover:bg-red-50 ml-auto"
                   title="删除"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -814,6 +1021,7 @@ function DeckSidebar({
         })}
       </div>
     </div>
+    </>
   );
 }
 
@@ -850,7 +1058,19 @@ export default function App() {
   // PPT deck 侧边栏
   const [decks, setDecks] = useState<Deck[]>([]);
   const [decksLoading, setDecksLoading] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // 手机默认收起文件栏，让聊天区占满窄屏；桌面(≥768px)默认展开
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : true,
+  );
+
+  // 视口缩到 md(768px) 以下时强制收起文件栏（如从桌面浏览器缩到手机宽度、旋转屏幕）
+  useEffect(() => {
+    const sync = () => {
+      if (window.innerWidth < 768) setSidebarOpen(false);
+    };
+    window.addEventListener('resize', sync);
+    return () => window.removeEventListener('resize', sync);
+  }, []);
   const openPreview = useCallback((d: Deck) => {
     if (d.preview_path)
       window.open(`/preview?path=${encodeURIComponent(d.preview_path)}`, '_blank', 'noopener');
@@ -1203,7 +1423,9 @@ export default function App() {
     abortRef.current = ac;
 
     try {
-      await processStream(streamChat(text + styleHint, userId, ac.signal));
+      // 精确匹配到内置示例问题时标记 example，让后端用稳定 key 缓存/回放整段过程
+      const isExample = EXAMPLE_QUESTIONS.some((e) => e.question === text);
+      await processStream(streamChat(text + styleHint, userId, ac.signal, isExample));
       // 流结束但未收到 'done' 事件时，手动收尾
       if (!clarifyPendingRef.current) {
         finalizeAssistant();
@@ -1264,8 +1486,10 @@ export default function App() {
     }
   }, [input]);
 
+  const isInitialScreen = messages.length === 0 && !isStreaming && !clarify;
+
   return (
-    <div className="h-screen flex bg-[#0b0f19] font-sans selection:bg-blue-500/30">
+    <div className="h-dvh flex bg-[#f7faff] font-sans selection:bg-blue-500/30">
       <DeckSidebar
         open={sidebarOpen}
         onToggle={() => setSidebarOpen((v) => !v)}
@@ -1277,37 +1501,20 @@ export default function App() {
         onDelete={handleDeleteDeck}
       />
       <div className="flex-1 flex flex-col min-w-0">
-      <Header userId={userId} onUserIdChange={setUserId} />
+      <Header
+        userId={userId}
+        onUserIdChange={setUserId}
+        onOpenFiles={() => setSidebarOpen(true)}
+      />
 
-      <main className="flex-1 overflow-y-auto py-6">
+      <main className={`flex-1 overflow-y-auto ${isInitialScreen ? 'py-0' : 'py-6'}`}>
         {/* 欢迎消息 */}
-        {messages.length === 0 && !isStreaming && (
-          <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <Bot className="w-12 h-12 text-blue-400/50 mb-4" />
-            <h2 className="text-xl font-semibold text-slate-300 mb-2">PPT 生成智能体</h2>
-            <p className="text-slate-500 text-sm max-w-md mb-8">
-              选风格 / 传模版 · 一句话生成整套演示 · 图片型 16:9 幻灯片
-            </p>
-            <div className="flex flex-wrap justify-center gap-2 max-w-2xl">
-              {EXAMPLE_QUESTIONS.map((ex, i) => (
-                <button
-                  key={i}
-                  className={`group flex items-center gap-2 px-4 py-2.5 text-[13px] rounded-xl transition-colors text-left leading-snug ${
-                    ex.demoFile
-                      ? 'text-amber-400/80 bg-amber-500/5 border border-amber-500/20 hover:bg-amber-500/10 hover:text-amber-300 hover:border-amber-500/30'
-                      : 'text-slate-400 bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700/60 hover:text-slate-300 hover:border-slate-600/60'
-                  }`}
-                  onClick={() => handleClickExample(ex)}
-                  disabled={isStreaming || uploading}
-                >
-                  {ex.demoFile && (
-                    <FileText className="w-3.5 h-3.5 shrink-0 text-amber-400/60 group-hover:text-amber-400/80" />
-                  )}
-                  <span>{ex.question}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+        {isInitialScreen && (
+          <WelcomeHero
+            examples={EXAMPLE_QUESTIONS}
+            onExampleClick={handleClickExample}
+            disabled={isStreaming || uploading}
+          />
         )}
 
         {/* 历史消息 */}
@@ -1338,18 +1545,18 @@ export default function App() {
 
       {/* 已上传文件栏 */}
       {uploadedFiles.length > 0 && (
-        <div className="w-full max-w-4xl mx-auto px-4 pb-2">
+        <div className="w-full max-w-[1286px] mx-auto px-4 md:px-8 pb-2">
           <div className="flex flex-wrap items-center gap-1.5 py-2">
             {uploadedFiles.map((f, i) => (
               <span
                 key={i}
-                className="inline-flex items-center gap-1 bg-slate-800 text-slate-300 px-2 py-1 rounded-lg text-[12px] border border-slate-700/50"
+                className="inline-flex items-center gap-1 bg-white/80 text-slate-700 px-2.5 py-1.5 rounded-xl text-[12px] border border-slate-200/70 shadow-sm"
                 title={f.path}
               >
                 <Paperclip className="w-3 h-3 text-slate-500" />
                 {f.name} ({formatSize(f.size)})
                 <button
-                  className="text-slate-500 hover:text-red-400 ml-0.5"
+                  className="text-slate-500 hover:text-red-600 ml-0.5"
                   onClick={() => handleRemoveFile(f.name)}
                 >
                   <XCircle className="w-3 h-3" />
@@ -1357,7 +1564,7 @@ export default function App() {
               </span>
             ))}
             <button
-              className="text-slate-500 hover:text-red-400 text-[12px] flex items-center gap-1 px-1.5"
+              className="text-slate-500 hover:text-red-600 text-[12px] flex items-center gap-1 px-1.5"
               onClick={handleClearFiles}
             >
               <Trash2 className="w-3 h-3" />
@@ -1369,30 +1576,31 @@ export default function App() {
 
       {/* 文件拖拽区域 */}
       <div
-        className={`w-full max-w-4xl mx-auto px-4 transition-opacity ${
+        className={`w-full max-w-[1286px] mx-auto px-4 md:px-8 transition-opacity ${
           isDragging ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
       >
-        <div className="border-2 border-dashed border-blue-500/50 rounded-xl py-3 text-center text-[13px] text-blue-400 bg-blue-500/5 mb-2">
+        <div className="border-2 border-dashed border-blue-500/50 rounded-xl py-3 text-center text-[13px] text-blue-600 bg-blue-500/5 mb-2">
           {uploading ? '上传中...' : '松开鼠标上传文件'}
         </div>
       </div>
 
       {/* 输入区域 */}
-      <div className="w-full max-w-4xl mx-auto px-4 pb-6 pt-2 shrink-0">
+      <div className="w-full max-w-[1286px] mx-auto px-4 md:px-8 pb-3 md:pb-6 pt-1.5 md:pt-2 shrink-0">
+        {/* 桌面端：单行布局 */}
         <div
-          className={`bg-[#151b28] border rounded-2xl flex items-end p-2 transition-colors shadow-lg shadow-black/20 ${
-            isDragging ? 'border-blue-500/60' : 'border-slate-700/60 focus-within:border-slate-500/60'
+          className={`hidden md:flex bg-white/95 border rounded-[22px] items-end gap-2 p-3 transition-colors shadow-[0_18px_48px_rgba(49,82,166,0.15)] backdrop-blur-xl ${
+            isDragging ? 'border-blue-500/60' : 'border-slate-200/80 focus-within:border-blue-200'
           }`}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
         >
           <button
-            className="p-3 text-slate-400 hover:text-slate-300 hover:bg-slate-800/50 rounded-xl transition-colors mb-0.5"
+            className="h-14 w-14 flex items-center justify-center text-violet-600 bg-violet-50 hover:bg-violet-100 rounded-2xl transition-colors shrink-0"
             onClick={() => fileInputRef.current?.click()}
             title="上传文件"
           >
@@ -1408,17 +1616,20 @@ export default function App() {
             onChange={handleFileSelect}
             className="hidden"
           />
-          <select
-            value={style}
-            onChange={(e) => setStyle(e.target.value)}
-            title="PPT 模版风格"
-            className="mb-1 mr-1 shrink-0 bg-[#0b0f19] border border-slate-700/60 rounded-xl text-[13px] text-slate-300 outline-none py-2.5 px-2 max-w-[9rem] focus:border-slate-500/60"
-          >
-            <option value="">模版：不指定</option>
-            {PPT_STYLES.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
+          <label className="h-14 inline-flex items-center gap-2 shrink-0 rounded-2xl bg-[#f0f3ff] border border-slate-200/70 px-4 text-[#08256f]">
+            <Palette className="w-4 h-4 text-violet-600" />
+            <select
+              value={style}
+              onChange={(e) => setStyle(e.target.value)}
+              title="PPT 模版风格"
+              className="bg-transparent text-[15px] font-bold outline-none max-w-[12rem]"
+            >
+              <option value="">模板：不指定</option>
+              {PPT_STYLES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </label>
           <textarea
             ref={textareaRef}
             rows={1}
@@ -1431,29 +1642,110 @@ export default function App() {
                 ? '请先回答上方的确认问题...'
                 : isStreaming
                   ? 'AI 正在思考...'
-                  : '输入你的研究问题...'
+                  : '输入你的研究问题或PPT需求...'
             }
-            className="flex-1 bg-transparent text-[15px] text-slate-200 placeholder:text-slate-500 resize-none outline-none py-3 px-3 max-h-32 min-h-[44px] disabled:opacity-50"
+            className="flex-1 min-w-0 bg-transparent text-[18px] text-slate-800 placeholder:text-slate-400 resize-none outline-none py-3 px-4 max-h-32 min-h-[48px] disabled:opacity-50"
           />
           {isStreaming ? (
             <button
-              className="p-2.5 m-0.5 bg-red-600 hover:bg-red-500 text-white rounded-xl transition-colors shrink-0"
+              className="h-14 px-5 bg-red-600 hover:bg-red-500 text-white rounded-2xl transition-colors shrink-0 flex items-center gap-2 font-bold"
               onClick={handleStop}
               title="停止"
             >
               <Square className="w-5 h-5" />
+              <span className="hidden sm:inline">停止</span>
             </button>
           ) : (
             <button
-              className="p-2.5 m-0.5 bg-[#2563eb] hover:bg-blue-600 text-white rounded-xl transition-colors shrink-0 disabled:opacity-40"
+              className="h-14 px-7 bg-[linear-gradient(135deg,#4f83ff,#7c3df2)] hover:brightness-105 text-white rounded-2xl transition shrink-0 disabled:opacity-40 flex items-center gap-2 font-black shadow-[0_10px_24px_rgba(79,131,255,0.28)]"
               onClick={sendMessage}
               disabled={!input.trim() || !!clarify}
             >
-              <ArrowUp className="w-5 h-5" />
+              <Send className="w-5 h-5" />
+              <span className="hidden sm:inline">生成 PPT</span>
             </button>
           )}
         </div>
-        <div className="text-center mt-3 text-[12px] text-slate-500">
+
+        {/* 移动端：两行布局 — 上行 textarea，下行 上传+模板(左) + 发送(右) */}
+        <div
+          className={`md:hidden bg-white/95 border rounded-[20px] transition-colors shadow-[0_14px_36px_rgba(49,82,166,0.13)] backdrop-blur-xl ${
+            isDragging ? 'border-blue-500/60' : 'border-slate-200/80 focus-within:border-blue-200'
+          }`}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+        >
+          <textarea
+            ref={textareaRef}
+            rows={1}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={isStreaming || !!clarify}
+            placeholder={
+              clarify
+                ? '请先回答上方的确认问题...'
+                : isStreaming
+                  ? 'AI 正在思考...'
+                  : '输入你的研究问题或PPT需求...'
+            }
+            className="w-full bg-transparent text-[14px] text-slate-800 placeholder:text-slate-400 resize-none outline-none py-3 px-4 max-h-28 min-h-[44px] disabled:opacity-50"
+          />
+          <div className="flex items-center gap-2 p-2 pt-0">
+            <button
+              className="h-10 w-10 flex items-center justify-center text-violet-600 bg-violet-50 hover:bg-violet-100 rounded-2xl transition-colors shrink-0"
+              onClick={() => fileInputRef.current?.click()}
+              title="上传文件"
+            >
+              {uploading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Upload className="w-4 h-4" />
+              )}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            <label className="h-10 inline-flex items-center gap-1.5 shrink-0 rounded-2xl bg-[#f0f3ff] border border-slate-200/70 px-3 text-[#08256f]">
+              <Palette className="w-3.5 h-3.5 text-violet-600" />
+              <select
+                value={style}
+                onChange={(e) => setStyle(e.target.value)}
+                title="PPT 模版风格"
+                className="bg-transparent text-[12px] font-bold outline-none max-w-[7.4rem]"
+              >
+                <option value="">模板：不指定</option>
+                {PPT_STYLES.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </label>
+            {isStreaming ? (
+              <button
+                className="ml-auto h-10 px-3 bg-red-600 hover:bg-red-500 text-white rounded-2xl transition-colors shrink-0 flex items-center gap-2 font-bold"
+                onClick={handleStop}
+                title="停止"
+              >
+                <Square className="w-4 h-4" />
+                停止
+              </button>
+            ) : (
+              <button
+                className="ml-auto h-10 px-3.5 bg-[linear-gradient(135deg,#4f83ff,#7c3df2)] hover:brightness-105 text-white rounded-2xl transition shrink-0 disabled:opacity-40 flex items-center gap-2 font-black shadow-[0_8px_20px_rgba(79,131,255,0.24)]"
+                onClick={sendMessage}
+                disabled={!input.trim() || !!clarify}
+              >
+                <Send className="w-4 h-4" />
+                生成 PPT
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="text-center mt-2 md:mt-3 text-[11px] md:text-[12px] text-slate-500">
           内容由 AI 生成，请仔细甄别。
         </div>
       </div>

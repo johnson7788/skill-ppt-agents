@@ -65,6 +65,8 @@ npm-debug.log
 yarn-error.log
 **/Pods/
 vendor/
+# dashi-ppt skill 的运行时 vendor 资产（unicornstudio/fonts/editable-pptx-browser）必须随仓库交付
+!backend/app/skills/dashi-ppt/project/assets/vendor/
 .env*
 cache
 .env_dev
@@ -74,6 +76,10 @@ cache
 .claude/settings.local.json
 .next
 dist
+# dashi-ppt skill 是「安装版」，渲染/导出只能用预构建产物（theme-runtime + html-deck-to-pptx/dist），必须随仓库交付。
+# node_modules 仍由上面的 node_modules/ 规则忽略，不受此白名单影响。
+!backend/app/skills/dashi-ppt/project/**/dist/
+!backend/app/skills/dashi-ppt/project/**/dist/**
 
 # 日志（可能含密钥/对话内容）
 logs/

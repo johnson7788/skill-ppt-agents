@@ -54,8 +54,10 @@ from fastapi.responses import StreamingResponse, JSONResponse, FileResponse, HTM
 from fastapi.staticfiles import StaticFiles
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.artifacts import InMemoryArtifactService
+from google.adk.errors.already_exists_error import AlreadyExistsError
+from google.adk.errors.session_not_found_error import SessionNotFoundError
 from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
+from google.adk.sessions.sqlite_session_service import SqliteSessionService
 from google.genai import types
 from pydantic import BaseModel
 
@@ -76,9 +78,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
-session_service = InMemorySessionService()
+# 会话持久化到 SQLite（跨 worker 共享）：docker-compose 默认 4 个 uvicorn worker，
+# 每个 worker 是独立进程、各有独立 InMemorySessionService —— 之前 /chat/stream 在 worker A
+# 建的会话，/chat/answer（clarify 续跑）落在 worker B 就 "Session not found"。改用
+# SqliteSessionService + 按 user 的确定性 session_id，任何 worker 都解析到同一条会话。
+# ponytail: SQLite 单写者即可，多 worker 并发写量低（单用户），无需换 Redis；要"新对话"
+# 清历史再加端点，YAGNI。
+SESSION_DB = Path(__file__).parent / "adk_sessions.db"
+
+session_service = SqliteSessionService(str(SESSION_DB))
 artifact_service = InMemoryArtifactService()
 runner = Runner(
     agent=root_agent,
@@ -87,29 +101,22 @@ runner = Runner(
     app_name=APP_NAME,
 )
 
-# 每个 user 复用同一条会话，让多轮对话共享历史。否则每次 /chat/stream 都 create_session=全新空
-# 历史，智能体记不住上一轮：例如先说"写杭州一日游 PPT"、agent 让选主题，再答"我选 theme12"时
-# 已是新会话、丢了"杭州一日游"上下文，于是又反问"你想做什么内容"。本地单用户(default_user)足够。
-# ponytail: 进程内 map，重启即清；要"新对话/清历史"再加端点，YAGNI。
-_user_sessions: dict[str, str] = {}
-
 
 async def _get_or_create_session(user_id: str):
-    sid = _user_sessions.get(user_id)
-    if sid:
-        try:
-            sess = await session_service.get_session(
-                app_name=APP_NAME, user_id=user_id, session_id=sid
-            )
-            if sess:
-                return sess
-        except Exception:
-            pass
-    sess = await session_service.create_session(
-        user_id=user_id, app_name=APP_NAME, state={"_sbkey": user_id}
+    sid = f"user-{user_id}"  # 确定性 id：跨 worker/跨请求都复用同一条会话，历史连续
+    sess = await session_service.get_session(
+        app_name=APP_NAME, user_id=user_id, session_id=sid
     )
-    _user_sessions[user_id] = sess.id
-    return sess
+    if sess:
+        return sess
+    try:
+        return await session_service.create_session(
+            user_id=user_id, app_name=APP_NAME, session_id=sid, state={"_sbkey": user_id}
+        )
+    except AlreadyExistsError:  # 并发首建竞态：另一个 worker 已建，取回即可
+        return await session_service.get_session(
+            app_name=APP_NAME, user_id=user_id, session_id=sid
+        )
 
 NARRATOR_STATE_KEY = "_narrator_cards"
 
@@ -1058,7 +1065,7 @@ async def _run_agent_stream(session_id: str, user_id: str, new_message, emit, st
 # GET /chat/stream — SSE 流式（协议 v2）
 # ---------------------------------------------------------------------------
 @app.get("/chat/stream")
-async def chat_stream(message: str, user_id: str = "default_user"):
+async def chat_stream(message: str, user_id: str = "default_user", example: bool = False):
     """
     SSE 事件协议 v2（含响应缓存）：
 
@@ -1076,8 +1083,13 @@ async def chat_stream(message: str, user_id: str = "default_user"):
     session = await _get_or_create_session(user_id)
     full_message = _build_message_with_files(message, user_id)
 
+    # 缓存 key：普通请求用 full_message（含上传文件内容，保证不同文件不串味）；
+    # 示例问题用原始 message（不含 uploads/<user_id> 里累积的历史生成文件），
+    # 否则每生成一次 deck 都会把它折进后续 prompt → key 漂移 → 示例永远 MISS。
+    cache_source = message if example else full_message
+
     # 检查缓存命中 → 快速回放缓存事件，跳过 LLM 调用
-    cached_events = _sse_cache.get(full_message)
+    cached_events = _sse_cache.get(cache_source)
     if cached_events is not None:
         #缓存命中的情况
         logger.info("SSE cache HIT: %.60s...", message)
@@ -1121,7 +1133,7 @@ async def chat_stream(message: str, user_id: str = "default_user"):
 
         # 触发了 clarify（人在回路）时不写缓存——回放无法续接用户的真实回答。
         if collected_events and not state.get("clarify"):
-            _sse_cache.set(full_message, collected_events)
+            _sse_cache.set(cache_source, collected_events)
             logger.info("SSE cache SET (%d events): %.60s...", len(collected_events), message)
 
         # 关闭 session 日志
@@ -1192,11 +1204,21 @@ async def chat_answer(req: AnswerRequest):
         try:
             async for frame in event_generator():
                 yield frame
+        except SessionNotFoundError:
+            # 会话持久化在 SQLite，正常跨 worker/重启都存在；但 DB 被删/长期未续接仍可能丢失。
+            # 若接不上原来的 function_call 上下文，降级为友好提示 + done, 别 raise 成 500 死流
+            #（否则前端拿到整段 traceback）。让用户重新发起即可。
+            logger.warning("Answer for missing session %s (session lost)", req.session_id)
+            slog.log_error("session not found")
+            slog.close()
+            yield _sse({"type": "text", "text": "\n\n⚠️ 这轮会话已失效，接不上上一个确认问题了。请重新发送你的需求，我会重新开始生成。"})
+            yield _sse({"type": "done", "text_len": 0, "thought_count": 0, "step_count": 0, "card_count": 0})
         except Exception as e:
             logger.error("Answer stream error: %s", e, exc_info=True)
             slog.log_error(str(e))
             slog.close()
-            raise
+            yield _sse({"type": "text", "text": "\n\n⚠️ 处理你的回答时出错了，本次已中断。请重试；若持续失败，建议重新发起生成。"})
+            yield _sse({"type": "done", "text_len": 0, "thought_count": 0, "step_count": 0, "card_count": 0})
 
     return StreamingResponse(
         safe_event_generator(),

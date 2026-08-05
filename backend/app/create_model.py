@@ -9,7 +9,10 @@ import os
 import litellm
 from google.adk.models.lite_llm import LiteLlm
 from dotenv import load_dotenv
-litellm._turn_on_debug()
+# LiteLLM DEBUG 会对每次 LLM 调用逐条打印回调/成本/流式细节，PPT 生成有大量调用时
+# 显著拖慢并刷屏日志。默认关闭，需要排障时设 LITELLM_DEBUG=1 再开。
+if os.environ.get("LITELLM_DEBUG", "").strip().lower() in ("1", "true", "yes", "on"):
+    litellm._turn_on_debug()
 
 load_dotenv()
 def create_model(model:str, provider: str):

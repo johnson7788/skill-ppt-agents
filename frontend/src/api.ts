@@ -54,8 +54,10 @@ export async function* streamChat(
   message: string,
   userId: string = 'default_user',
   signal?: AbortSignal,
+  example = false,
 ): AsyncGenerator<SSEEvent> {
-  const url = `${API_BASE}/chat/stream?message=${encodeURIComponent(message)}&user_id=${encodeURIComponent(userId)}`;
+  // example=1 时后端用「原始问题文本」做缓存 key（不含累积的上传/生成文件），保证示例点击稳定命中缓存
+  const url = `${API_BASE}/chat/stream?message=${encodeURIComponent(message)}&user_id=${encodeURIComponent(userId)}${example ? '&example=1' : ''}`;
   const response = await fetch(url, {
     headers: { Accept: 'text/event-stream' },
     signal,
