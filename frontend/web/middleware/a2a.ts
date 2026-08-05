@@ -63,6 +63,7 @@ export const plugin = (): Plugin => ({
           res.statusCode = 200;
           res.setHeader('Content-Type', 'text/event-stream');
           res.setHeader('Cache-Control', 'no-cache');
+          res.flushHeaders(); // 立刻冲刷响应头，避免首帧在中间件被攒着
           for await (const chunk of stream) {
             if (res.destroyed) break;
             if (chunk.kind === 'status-update' && chunk.status.message?.parts) {

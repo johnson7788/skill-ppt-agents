@@ -158,6 +158,13 @@ body {
   font-size: 13px;
   color: #6b7280;
 }
+.thinking summary {
+  list-style: none;
+  cursor: pointer;
+}
+.thinking summary::-webkit-details-marker {
+  display: none;
+}
 .thinking-head {
   display: flex;
   align-items: center;

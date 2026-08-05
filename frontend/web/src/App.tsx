@@ -14,15 +14,18 @@ const EXAMPLES = [
 ];
 
 // 官方 A2A 传输：SSE 每帧 = A2A Part[]（{kind:'text',text} | {kind:'data',data:<A2UI消息>}）。
+// text part 带 metadata.thinking=true 时是模型的思考链，渲染到独立的「思考」气泡。
 interface Part {
   kind: 'data' | 'text' | 'error';
   data?: A2uiMessage;
   text?: string;
+  metadata?: {thinking?: boolean};
 }
 
-// 一轮对话：用户问 + AI 引导语 + 该轮渲染出的卡片（surfaceId 由后端生成，前端记录后按它渲染）。
+// 一轮对话：用户问 + 思考链 + AI 引导语 + 该轮渲染出的卡片（surfaceId 由后端生成，前端记录后按它渲染）。
 interface Turn {
   q: string;
+  thinking: string;
   intro: string;
   surfaceIds: string[];
 }
@@ -57,13 +60,17 @@ export function App() {
   const send = useCallback(
     async (body: object, q?: string) => {
       setLoading(true);
-      setTurns(prev => [...prev, {q: q ?? '', intro: '', surfaceIds: []}]);
+      setTurns(prev => [...prev, {q: q ?? '', thinking: '', intro: '', surfaceIds: []}]);
       const patchLast = (upd: (t: Turn) => Partial<Turn>) =>
         setTurns(prev => {
           const c = [...prev];
           c[c.length - 1] = {...c[c.length - 1], ...upd(c[c.length - 1])};
           return c;
         });
+      // 后端按 token 增量逐帧发 text part → 本轮原文累加后整体渲染 markdown（单气泡，不碎片）。
+      // 思考链走 metadata.thinking 通道，单独累进到 thinking（不污染引导语气泡）。
+      let introText = '';
+      let thinkingText = '';
       try {
         const res = await fetch('/a2a', {
           method: 'POST',
@@ -87,8 +94,14 @@ export function App() {
               if (p.kind === 'error' && p.text) {
                 patchLast(() => ({intro: `出错了：${p.text}`}));
               } else if (p.kind === 'text' && p.text) {
-                const html = await renderMarkdown(p.text);
-                patchLast(() => ({intro: html}));
+                if (p.metadata?.thinking) {
+                  thinkingText += p.text;
+                  patchLast(() => ({thinking: thinkingText}));
+                } else {
+                  introText += p.text;
+                  const html = await renderMarkdown(introText);
+                  patchLast(() => ({intro: html}));
+                }
               } else if (p.kind === 'data' && p.data) {
                 const sid = (p.data as {createSurface?: {surfaceId: string}}).createSurface?.surfaceId;
                 if (sid) patchLast(t => ({surfaceIds: [...t.surfaceIds, sid]}));
@@ -147,6 +160,15 @@ export function App() {
           {turns.map((t, i) => (
             <Fragment key={i}>
               {t.q && <div className="bubble user">{t.q}</div>}
+              {t.thinking && (
+                <details className="thinking" open={loading}>
+                  <summary className="thinking-head">
+                    <span className="thinking-dot" />
+                    <span>思考过程</span>
+                  </summary>
+                  <div className="thinking-body">{t.thinking}</div>
+                </details>
+              )}
               {t.intro && <div className="bubble ai" dangerouslySetInnerHTML={{__html: t.intro}} />}
               {surfaces
                 .filter(s => t.surfaceIds.includes(s.id))
@@ -157,7 +179,13 @@ export function App() {
                 ))}
             </Fragment>
           ))}
-          {loading && <div className="bubble ai loading-dots">思考中…</div>}
+          {(() => {
+            // 首帧未到前显示「思考中…」；一旦有流式思考/文本/卡片到达就撤掉，避免与内容并存
+            const t = turns[turns.length - 1];
+            const waitingFirstFrame =
+              loading && (!t || (!t.thinking && !t.intro && t.surfaceIds.length === 0));
+            return waitingFirstFrame ? <div className="bubble ai loading-dots">思考中…</div> : null;
+          })()}
         </main>
 
         <form

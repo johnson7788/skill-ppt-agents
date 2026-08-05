@@ -47,12 +47,22 @@ class EvidenceAgentExecutor(AgentExecutor):
             await event_queue.enqueue_event(task)
         updater = TaskUpdater(event_queue, task.id, task.context_id)
 
+        # 流式多帧：每帧**立即**推 working + final=False，agent 流结束后补一条
+        # input_required + final=True 空事件表示流结束。
+        # 不能「隔一帧推前一帧」或「peek 一层再推」：工具执行期 agent 长时间不产帧，
+        # 会把 function_call 进度旁白/最后一段思考卡在缓冲里 20s+，直到 function_response
+        # 帧到达才一起爆出来（final=true 表示流结束，帧帧 final 会让客户端收到第一帧就断流）。
         async for parts in self._agent.stream(query, task.context_id):
             await updater.update_status(
-                TaskState.input_required,
+                TaskState.working,
                 new_agent_parts_message(parts, task.context_id, task.id),
-                final=True,
+                final=False,
             )
+        await updater.update_status(
+            TaskState.input_required,
+            new_agent_parts_message([], task.context_id, task.id),
+            final=True,
+        )
 
     async def cancel(
         self, request: RequestContext, event_queue: EventQueue

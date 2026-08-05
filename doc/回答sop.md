@@ -67,8 +67,13 @@ LlmAgent(msg) ──────┤─ 调 make_questionnaire(symptom) ───
 - **有状态**：同一 `contextId` 复用 ADK session = 全量多轮历史，agent 看得到上文再路由
   （已实测：「孕妇能吃氯雷他定吗」后追问「那哺乳期呢？」，agent 正确接住省略的药名）。
 - 每张卡独立 `surfaceId`（后端 `card-<uuid>` 生成），同会话内互不覆盖。
-- **非流式**：agent 一轮产一条最终 status-update（文本+卡片一次到达）。A2UI shell 把每个
-  TextPart 当独立气泡，逐 token 流会碎成多气泡，故不流式。要 token 流需可合并的文本渲染器。
+- **真·流式**：`run_async` 跑在 `RunConfig(streaming_mode=SSE)` 下，LLM 正文按 token 增量
+  （partial 事件）逐帧 yield 成 TextPart；检测到工具 function_call 先发一句进度旁白（检索阶段不白屏）；
+  流式段结尾 ADK 会再抛一条整段全文的完整事件，与增量重复，`stream()` 跳过它防前端累加翻倍
+  （模型不流式时无增量，该完整事件照常兜底下发）。卡片不随文本流：render_queue 等工具跑完才有，
+  整轮结束后按水位线 drain，作为最后一帧 DataParts 到达。executor 中间帧 `working`+`final=False`、
+  末帧 `input_required`+`final=True`。前端 `App.tsx` 把增量累加进本轮原文、整体重渲 markdown——
+  单气泡渐显，不会碎成多气泡。
 - 兜底：任一步异常 → SSE `error` part → 前端「出错了：…」气泡。
 
 ## 六、加一种新模式怎么做
